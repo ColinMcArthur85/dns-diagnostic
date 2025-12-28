@@ -1,0 +1,20 @@
+[
+  {
+    "type": "A",
+    "host": "example.com",
+    "value": "93.184.216.34",
+    "ttl": 3600
+  },
+  {
+    "type": "MX",
+    "host": "example.com",
+    "value": "1 aspmx.l.google.com.",
+    "ttl": 3600
+  },
+  {
+    "type": "TXT",
+    "host": "example.com",
+    "value": "v=spf1 include:_spf.google.com ~all",
+    "ttl": 3600
+  }
+]

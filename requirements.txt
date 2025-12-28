@@ -1,0 +1,6 @@
+pyyaml
+dnspython
+tldextract
+openai
+python-dotenv
+python-whois

@@ -1,0 +1,316 @@
+version: 1.0
+last_updated: 2025-12-27
+
+# --- PLATFORMS (Single Source of Truth) ---
+platforms:
+  attractwell:
+    id: aw
+    display_name: AttractWell
+    nameservers:
+      - ns.liquidweb.com
+      - ns1.liquidweb.com
+    root_domain:
+      option_1:
+        type: nameserver
+        description: Full DNS management by AttractWell
+      option_2:
+        type: record_level
+        records:
+          - type: A
+            host: "@"
+            value: 199.189.226.101
+          - type: CNAME
+            host: www
+            value: "{root_domain}"
+    subdomain:
+      connection_type: cname_only
+      target: sites.attractwell.com
+
+  getoiling:
+    id: go
+    display_name: GetOiling
+    nameservers:
+      - ns.liquidweb.com
+      - ns1.liquidweb.com
+    root_domain:
+      option_1:
+        type: nameserver
+        description: Full DNS management by GetOiling
+      option_2:
+        type: record_level
+        records:
+          - type: A
+            host: "@"
+            value: 199.189.226.101
+          - type: CNAME
+            host: www
+            value: "{root_domain}"
+    subdomain:
+      connection_type: cname_only
+      target: sites.getoiling.com
+
+  namebright:
+    id: nb
+    display_name: NameBright
+    nameservers:
+      - ns1.namebrightdns.com
+      - ns2.namebrightdns.com
+    root_domain:
+      option_1:
+        type: nameserver
+        description: Standard NameBright DNS
+      option_2:
+        type: record_level
+        records:
+          - type: A
+            host: "@"
+            value: 104.20.42.28  # Primary Cloudflare-backed IP
+          - type: A
+            host: "@"
+            value: 172.66.167.97 # Secondary Cloudflare-backed IP
+          - type: CNAME
+            host: www
+            value: "{root_domain}"
+
+  squarespace_registrar:
+    id: sqd
+    display_name: Squarespace Domains (Google Domains)
+    nameservers:
+      - ns-cloud-a1.googledomains.com
+      - ns-cloud-a2.googledomains.com
+      - ns-cloud-a3.googledomains.com
+      - ns-cloud-a4.googledomains.com
+    notes: "Managed at domains.squarespace.com"
+
+  squarespace_site:
+    id: sqs
+    display_name: Squarespace Website
+    root_domain:
+      option_1:
+        type: record_level
+        records:
+          - type: CNAME
+            host: www
+            value: ext-cust.squarespace.com
+          - type: A
+            host: "@"
+            value: 198.185.159.144
+          - type: A
+            host: "@"
+            value: 198.185.159.145
+          - type: A
+            host: "@"
+            value: 198.49.23.144
+          - type: A
+            host: "@"
+            value: 198.49.23.145
+          - type: TXT
+            host: "@"
+            value: "verify.squarespace.com"
+
+  google_sites:
+    id: gs
+    display_name: Google Sites
+    root_domain:
+      option_1:
+        type: record_level
+        description: Connect via CNAME and Synthetic Record
+        records:
+          - type: CNAME
+            host: www
+            value: ghs.googlehosted.com.
+          - type: TXT
+            host: "@"
+            value: "google-site-verification={verification_code}"
+
+  wix:
+    id: wx
+    display_name: Wix
+    nameservers:
+      - ns1.wixdns.net
+      - ns2.wixdns.net
+    root_domain:
+      option_1:
+        type: nameserver
+        description: Full DNS management by Wix
+      option_2:
+        type: record_level
+        records:
+          - type: A
+            host: "@"
+            value: 23.236.62.147
+          - type: CNAME
+            host: www
+            value: "www{id}.wixdns.net"
+
+  siteground:
+    id: sg
+    display_name: SiteGround
+    nameservers:
+      - ns1.siteground.net
+      - ns2.siteground.net
+    root_domain:
+      option_1:
+        type: nameserver
+      option_2:
+        type: record_level
+        records:
+          - type: A
+            host: "@"
+            value: "{server_ip}"
+
+  bluehost:
+    id: bh
+    display_name: Bluehost
+    nameservers:
+      - ns1.bluehost.com
+      - ns2.bluehost.com
+    root_domain:
+      option_1:
+        type: nameserver
+      option_2:
+        type: record_level
+        records:
+          - type: A
+            host: "@"
+            value: "{server_ip}"
+
+  godaddy_hosting:
+    id: gd
+    display_name: GoDaddy Hosting
+    nameservers:
+      - ns01.domaincontrol.com
+      - ns02.domaincontrol.com
+    root_domain:
+      option_2:
+        type: record_level
+        records:
+          - type: A
+            host: "@"
+            value: "{server_ip}"
+
+# --- EMAIL & DNS SAFETY RULES ---
+email_rules:
+  preserve_if_mx_exists: true
+  do_not_modify:
+    - MX
+    - SPF
+    - DKIM
+    - DMARC
+  spf_identifier: "v=spf1"
+  dmarc_identifier: "_dmarc"
+
+  # Email Provider Fingerprints
+  email_providers:
+    google_workspace:
+      display_name: Google Workspace
+      mx_patterns:
+        - smtp.google.com 
+        - aspmx.l.google.com 
+      spf_includes:
+        - _spf.google.com
+    
+    microsoft_365:
+      display_name: Microsoft 365
+      mx_patterns:
+        - mail.protection.outlook.com 
+      spf_includes:
+        - spf.protection.outlook.com
+        
+    rackspace:
+      display_name: Rackspace Email
+      mx_patterns:
+        - mx1.emailsrvr.com
+        - mx2.emailsrvr.com
+      spf_includes:
+        - spf.emailsrvr.com 
+
+    namecheap_private_email:
+      display_name: Namecheap Private Email
+      mx_patterns:
+        - mx1.privateemail.com
+        - mx2.privateemail.com
+      spf_includes:
+        - spf.privateemail.com
+        
+    godaddy:
+      display_name: GoDaddy (Microsoft 365)
+      mx_patterns:
+        - mail.protection.outlook.com 
+      spf_includes:
+        - secureserver.net
+
+    unknown:
+      display_name: Unknown Provider
+
+# --- CONNECTION DECISION RULES ---
+decision_rules:
+  root_domain:
+    - when:
+        external_dependencies: false
+      use: option_1
+    - when:
+        external_dependencies: true
+      use: option_2
+  subdomain:
+    always_use: cname_only
+
+# --- DELEGATE ACCESS LOGIC ---
+delegate_access:
+  recommend_if:
+    - registrar_unknown: true
+    - user_uncomfortable_editing_dns: true
+    - dns_conflicts_detected: true
+
+# --- DELEGATE ACCESS LINKS (Registrar-specific) ---
+delegate_access_links:
+  godaddy:
+    display_name: GoDaddy
+    help_url: "https://ca.godaddy.com/help/invite-a-delegate-to-access-my-godaddy-account-12376"
+    access_level: "Products & Domains"
+    notes: "Billing access is NOT required"
+    delegates:
+      attractwell: support@attractwell.com
+      getoiling: support@getoiling.com
+
+  namecheap:
+    display_name: Namecheap
+    help_url: "https://www.namecheap.com/support/knowledgebase/article.aspx/192/46/how-do-i-share-access-to-my-domain-with-other-users/"
+    access_level: "Domain access"
+    notes: "Billing access is NOT required"
+    delegates:
+      attractwell: support@attractwell.com
+      getoiling: support@getoiling.com
+
+  wix:
+    display_name: Wix
+    help_url: "https://support.wix.com/en/article/inviting-people-to-contribute-to-your-site"
+    access_level: "Admin (co-owner)"
+    notes: "This level is required to access the domain's DNS settings."
+    delegates:
+      attractwell: support@attractwell.com
+      getoiling: support@getoiling.com
+
+  squarespace:
+    display_name: Squarespace
+    help_url: "https://support.squarespace.com/hc/en-us/articles/206537287-Inviting-a-contributor"
+    access_level: "Administrator"
+    notes: "Required for full domain and DNS management."
+    delegates:
+      attractwell: support@attractwell.com
+      getoiling: support@getoiling.com
+
+# --- STANDARD WARNINGS (Reusable) ---
+warnings:
+  mx_present:
+    message: >
+      We detected existing email records on this domain.
+      Do not change MX, SPF, DKIM, or DMARC records or email may stop working.
+  subdomain_nameserver_block:
+    message: >
+      Subdomains should not use nameserver changes.
+      Only add or update the required CNAME record.
+  conflicting_records:
+    message: >
+      Conflicting DNS records were detected for this hostname.
+      These must be resolved before continuing.

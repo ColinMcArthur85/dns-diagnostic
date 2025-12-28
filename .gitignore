@@ -1,0 +1,19 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+.pytest_cache/
+.DS_Store
+dist/
+build/
+*.egg-info/
+
+# UI
+ui/node_modules/
+ui/.next/
+ui/out/
+ui/.pnpm-debug.log*
+ui/npm-debug.log*
+ui/yarn-debug.log*
+ui/yarn-error.log*
+ui/.env*

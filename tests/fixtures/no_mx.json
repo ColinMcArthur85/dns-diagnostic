@@ -1,0 +1,20 @@
+[
+  {
+    "type": "A",
+    "host": "example.com",
+    "value": "93.184.216.34",
+    "ttl": 3600
+  },
+  {
+    "type": "NS",
+    "host": "example.com",
+    "value": "a.iana-servers.net",
+    "ttl": 3600
+  },
+  {
+      "type": "MX",
+      "host": "example.com",
+      "value": "0 .",
+      "ttl": 3600
+  }
+]
