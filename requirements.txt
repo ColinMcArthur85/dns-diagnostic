@@ -1,6 +1,6 @@
-pyyaml
 dnspython
 tldextract
+whois
 openai
-python-dotenv
-python-whois
+pyyaml
+requests

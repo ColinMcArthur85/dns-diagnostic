@@ -24,14 +24,8 @@ All identified security vulnerabilities have been remediated:
 ### P0 - CRITICAL (All Fixed)
 
 #### 1. ✅ Command Injection Vulnerability - FIXED
-**Files Modified**: 
-- `ui/src/app/api/diagnose/route.ts`
-- `ui/src/app/api/chat/route.ts`
-
-**Fix Applied**:
-- Replaced `exec()` with `execFile()` - prevents shell interpretation
-- All user inputs passed as array arguments, not string interpolation
-- Input validation with strict regex patterns
+**Files Modified**: `/api/diagnose.py`, `/api/chat.py`
+**Fix Applied**: Project restructured to use native Python serverless functions in Vercel. Python code is executed directly by the runtime rather than being called via a shell or sub-process, neutralizing the possibility of shell-based command injection. Input validation with strict regex patterns is still applied.
 
 #### 2. ✅ SSRF Protection - ADDED
 **Files Modified**:

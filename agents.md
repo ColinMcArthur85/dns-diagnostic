@@ -7,8 +7,15 @@ A guide for AI agents and developers working on the DNS Diagnostic Tool.
 A hybrid application for diagnosing DNS configurations and providing guided setup plans for AttractWell and GetOiling platforms.
 
 - **Frontend**: Next.js (TypeScript, Tailwind CSS v4, Framer Motion) in `/ui`
-- **Backend**: Python CLI engine in `/src` for deterministic diagnostics and AI-driven insights
-- **Integration**: UI calls Python engine via `execFile()` in Next.js API routes
+- **Backend**: Python CLI engine in `/src` for deterministic diagnostics
+## Architecture
+
+- **Language**: TypeScript (Next.js 15) & Python 3
+- **Deployment**: Vercel (Hybrid Next.js + Python serverless)
+- **API Entry Points**: 
+  - `api/diagnose.py`: Root diagnostic logic
+  - `api/chat.py`: Conversational agent logic
+- **Core Logic**: Located in `/logic` directory
 - **Truth Source**: `domain_rules.yaml` contains all platform logic and DNS rules
 
 ### Core Philosophy

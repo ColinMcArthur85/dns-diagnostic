@@ -17,3 +17,6 @@ ui/npm-debug.log*
 ui/yarn-debug.log*
 ui/yarn-error.log*
 ui/.env*
+node_modules
+.vercel
+.next

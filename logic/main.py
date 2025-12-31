@@ -6,12 +6,12 @@ import os
 # Add src to path if running directly
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.config_loader import ConfigLoader
-from src.dns_lookup import DNSLookup
-from src.email_detector import EmailDetector
-from src.decision_engine import DecisionEngine
-from src.action_plan_builder import ActionPlanBuilder
-from src.ai_translator import AITranslator
+from logic.config_loader import ConfigLoader
+from logic.dns_lookup import DNSLookup
+from logic.email_detector import EmailDetector
+from logic.decision_engine import DecisionEngine
+from logic.action_plan_builder import ActionPlanBuilder
+from logic.ai_translator import AITranslator
 
 def main():
     parser = argparse.ArgumentParser(description="DNS Diagnostic Tool (Phase 2)")
