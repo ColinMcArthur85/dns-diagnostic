@@ -21,15 +21,16 @@ class handler(BaseHTTPRequestHandler):
             session_id = data.get('session_id')
             message = data.get('message')
             diagnostic_data = data.get('diagnostic_data')
+            history = data.get('history', [])
             audience = data.get('audience', 'customer')
             action = data.get('action', 'chat')
 
-            agent = ConversationalAgent()
+            agent = ConversationalAgent(model="gpt-5-mini")
             
             if action == 'start' or not session_id:
                 result = agent.start_conversation(diagnostic_data, audience=audience)
             else:
-                result = agent.chat(session_id, message, diagnostic_data, audience=audience)
+                result = agent.chat(diagnostic_data, history, message, audience=audience)
 
             self._send_json(result, 200)
 

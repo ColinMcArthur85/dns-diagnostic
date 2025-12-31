@@ -14,7 +14,7 @@ class ConversationalAgent:
     grounded in the original diagnostic data.
     """
     
-    def __init__(self, model="gpt-4o"):
+    def __init__(self, model="gpt-5-mini"):
         self.api_key = os.getenv("OPENAI_API_KEY")
         if not self.api_key:
             raise ValueError("OPENAI_API_KEY not found in environment variables.")

@@ -86,6 +86,8 @@ export default function ChatInterface({ diagnosticData, audience, onClose }: Cha
           action: 'chat',
           session_id: sessionId,
           message: textToSend,
+          history: messages,
+          diagnostic_data: diagnosticData,
           audience
         })
       });
