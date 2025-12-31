@@ -285,7 +285,7 @@ export default function Home() {
                       <label className="block">
                         <div className="flex items-center gap-2 mb-3">
                           <Terminal size={14} className="text-purple-400" />
-                          <span className="text-sm font-bold text-gray-300">AI Explanation Mode (Phase 2)</span>
+                          <span className="text-sm font-bold text-gray-300">AI Explanation Mode</span>
                           <span className="bg-purple-500/10 text-purple-400 text-[8px] font-bold px-1.5 py-0.5 rounded uppercase">
                             New
                           </span>
@@ -454,9 +454,6 @@ export default function Home() {
                   <div className="flex items-center gap-3">
                     <Terminal className="text-blue-400" size={20} />
                     <h3 className="font-bold text-lg">AI Analysis</h3>
-                    <span className="bg-purple-500/10 text-purple-400 text-[9px] font-bold px-2 py-0.5 rounded uppercase tracking-wider">
-                      Phase 2
-                    </span>
                   </div>
                   
                   {/* Tabs for Support vs Customer view (if both are available) */}
@@ -612,7 +609,7 @@ export default function Home() {
                   {result.ai_insights?._metadata?.guardrails_active && (
                     <div className="text-[10px] text-gray-600 italic flex items-center gap-2 pt-2 border-t border-[#262626]">
                       <Shield size={12} />
-                      Phase 2 Guardrails Active: AI is bounded to diagnostic data only
+                      AI is bounded to diagnostic data only
                     </div>
                   )}
                 </div>
@@ -654,7 +651,7 @@ export default function Home() {
           <span className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-[#0d0d0d] animate-pulse"></span>
           <div className="absolute top-0 right-0 -mr-2 -mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
             <div className="bg-black/90 text-white text-xs px-3 py-1.5 rounded-lg whitespace-nowrap shadow-xl">
-              Ask questions (Phase 3)
+              Ask questions
             </div>
           </div>
         </motion.button>

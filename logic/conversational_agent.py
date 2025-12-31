@@ -103,7 +103,7 @@ Avoid jargon. If you must use technical terms, explain them simply.
                 model=self.model,
                 messages=messages,
                 temperature=0.4,  # Slightly higher than Phase 2 for conversational feel
-                max_tokens=500  # Limit response length
+                max_completion_tokens=500  # Limit response length
             )
             
             ai_message = response.choices[0].message.content

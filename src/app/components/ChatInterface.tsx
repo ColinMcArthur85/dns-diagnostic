@@ -122,7 +122,7 @@ export default function ChatInterface({ diagnosticData, audience, onClose }: Cha
           <div>
             <div className="font-bold text-white text-sm">DNS Assistant</div>
             <div className="text-xs text-gray-400 flex items-center gap-2">
-              Phase 3 • {audience === 'customer' ? 'Customer Mode' : 'Support Mode'}
+              {audience === 'customer' ? 'Customer Mode' : 'Support Mode'}
             </div>
           </div>
         </div>
