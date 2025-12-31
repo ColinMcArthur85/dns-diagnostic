@@ -141,8 +141,7 @@ Remember: Only translate what's in the data. Do not invent records or suggest ac
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_content}
                 ],
-                response_format={"type": "json_object"},
-                temperature=0.3  # Lower temperature for more consistent, bounded responses
+                response_format={"type": "json_object"}
             )
             
             ai_result = json.loads(response.choices[0].message.content)
