@@ -12,7 +12,7 @@ class AITranslator:
     It follows strict guardrails to prevent hallucination and only translates existing data.
     """
     
-    def __init__(self, model="gpt-4o"):
+    def __init__(self, model="gpt-5-mini"):
         self.api_key = os.getenv("OPENAI_API_KEY")
         if not self.api_key:
             raise ValueError("OPENAI_API_KEY not found in environment variables.")
