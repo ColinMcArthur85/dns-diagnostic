@@ -1,6 +1,7 @@
 dnspython
 tldextract
-whois
+python-whois
 openai
 pyyaml
 requests
+python-dotenv
