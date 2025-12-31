@@ -7,13 +7,20 @@ class ConfigLoader:
         self.rules = self._load_config()
 
     def _load_config(self):
-        if not os.path.exists(self.config_path):
-             # Try looking in the root if we are in src
-             root_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), self.config_path)
-             if os.path.exists(root_path):
-                 self.config_path = root_path
-             else:
-                raise FileNotFoundError(f"Config file not found at {self.config_path}")
+        # Try multiple possible locations for the config file
+        possible_paths = [
+            self.config_path,  # Current directory
+            os.path.join(os.path.dirname(os.path.dirname(__file__)), self.config_path),  # Project root from logic/
+            os.path.join(os.path.dirname(__file__), '..', self.config_path),  # Alternative path
+            os.path.join('/var/task', self.config_path),  # Vercel serverless path
+        ]
+        
+        for path in possible_paths:
+            if os.path.exists(path):
+                self.config_path = path
+                break
+        else:
+            raise FileNotFoundError(f"Config file not found. Tried: {possible_paths}")
 
         with open(self.config_path, 'r') as f:
             return yaml.safe_load(f)
