@@ -101,7 +101,7 @@ export default function Home() {
           transition={{ delay: 0.2 }}
           className="text-muted"
         >
-          The ultimate engine for analyzing domain salud and connectivity settings.
+          Analyze domain DNS records for GetOiling and AttractWell.
         </motion.p>
 
         {/* Search Bar */}
