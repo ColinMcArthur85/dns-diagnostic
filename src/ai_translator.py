@@ -6,6 +6,12 @@ from dotenv import load_dotenv
 load_dotenv()
 
 class AITranslator:
+    """Phase 2: AI as a translator, not a decision-maker.
+    
+    This class translates structured DNS diagnostic data into human-readable explanations.
+    It follows strict guardrails to prevent hallucination and only translates existing data.
+    """
+    
     def __init__(self, model="gpt-4o"):
         self.api_key = os.getenv("OPENAI_API_KEY")
         if not self.api_key:
@@ -13,33 +19,113 @@ class AITranslator:
         self.client = OpenAI(api_key=self.api_key)
         self.model = model
 
-    def translate_diagnostic(self, diagnostic_json):
-        """
-        Takes the structured diagnostic JSON and returns three versions of explanations.
-        """
-        system_prompt = """
-You are a helpful DNS assistant. Your job is to analyze technical DNS diagnostic data and translate it into a single, high-quality analysis for an audience that MAY NOT understand DNS at all.
-
-**Tone & Audience**:
-- Speak in plain English. Avoid jargon where possible. If you use a term like "A Record", briefly explain its purpose (e.g., "points your domain to your website hosting").
-- The end user is likely a small business owner. Be helpful, reassurring, and clear.
-
-**Priorities for the analysis**:
-1. **Respect the Query Context**: If the user only asked for "Email Service", focus the primary reporting on that. If those records are perfect, start by saying so.
-2. **Handle Potential Issues**: If `is_completed` is true but there are items in `potential_issues`, it means the specific records requested are fine, but other critical records (like those for web hosting) were NOT checked and are likely missing. In this case, acknowledge the success of the requested check (e.g., "Your email records are perfectly configured!") but then add a helpful note like: "We noticed you haven't checked your website hosting records yet. Would you like to verify those next to ensure your site is fully connected?"
-3. **Explain Nameservers Carefully**: If nameservers are different from our target, explain that this is often OK, especially if email is already working.
-4. **A and CNAME Records**: If missing or conflicting in the queried scope, explain their purpose in plain English.
-5. **Handle Expired NameBright Domains**: Keep the specific TurnCommerce/NameBright phrasing for expired nameservers.
-6. **Next Steps as Questions**: For `next_steps`, if the requested check is done, use questions to lead the user, e.g., "Do you need to verify your website hosting connection next?" or "Are you planning to move your email service to our platform later?"
-
-Your output must be a JSON object with the following keys:
-- summary (string: a clear, concise, beginner-friendly analysis of the current state)
-- next_steps (array of strings: clear, non-technical actionable steps or "digging deeper" questions)
-
-Do not include any other text in your response, only the raw JSON.
+    def _get_system_prompt(self, audience="customer"):
+        """Generate system prompt with strict guardrails based on audience."""
+        
+        base_guardrails = """
+**CRITICAL GUARDRAILS - YOU MUST FOLLOW THESE STRICTLY**:
+1. **NEVER invent or suggest DNS records** that are not explicitly mentioned in the provided diagnostic data
+2. **ONLY translate existing data** - you are a translator, not a decision-maker
+3. If you don't know something or it's not in the data, say "I don't have that information" or "Please contact support for details"
+4. **DO NOT recommend specific DNS values** unless they are already in the `recommended_actions` array
+5. **DO NOT diagnose issues** beyond what's in the `conflicts` and `warnings` arrays
+6. Stick to facts from the JSON only
 """
 
-        user_content = f"Analyze the following DNS diagnostic data and connection plan:\n\n{json.dumps(diagnostic_json, indent=2)}"
+        if audience == "support":
+            return f"""
+You are a technical DNS analysis assistant for SUPPORT STAFF.
+
+{base_guardrails}
+
+**Your Audience**: Internal support team members who understand DNS basics but need clear technical summaries.
+
+**Your Task**: Translate the diagnostic JSON into a concise technical summary that highlights:
+- Current DNS state (what's configured correctly, what's missing, what conflicts exist)
+- Specific issues found (from `conflicts` and `warnings` arrays only)
+- Required actions (from `recommended_actions` array only)
+- Delegate access status and why it's recommended/not recommended
+
+**Tone**: Professional, technical but clear. Use DNS terminology appropriately.
+
+**Output Format**: JSON with these exact keys:
+- "technical_summary": Brief technical overview (2-3 sentences)
+- "issues": Array of specific issues found (from conflicts/warnings only, or empty array)
+- "actions_required": Array of actions (from recommended_actions only, or empty array)
+- "notes": Array of important context for support staff (e.g., platform-managed domain detected, email override occurred)
+
+ONLY output valid JSON. No other text.
+"""
+        else:  # customer
+            return f"""
+You are a helpful DNS assistant explaining domain connection status to CUSTOMERS.
+
+{base_guardrails}
+
+**Your Audience**: Business owners who likely don't understand DNS. Be reassuring and clear.
+
+**Your Task**: Translate the diagnostic JSON into plain English:
+- Explain what we found in simple terms
+- If there are problems, explain what they mean (not just "CNAME conflict")
+- If action is needed, explain it simply without technical jargon
+- Use analogies if helpful (e.g., "DNS is like your domain's address book")
+
+**Tone**: Friendly, reassuring, non-technical. Avoid acronyms unless you explain them.
+
+**Special Cases**:
+- If `is_completed` is true: Start with good news!
+- If there are `potential_issues`: Gently mention unchecked items
+- If delegate access is recommended: Explain why in simple terms
+
+**Output Format**: JSON with these exact keys:
+- "summary": Clear explanation of current status (2-4 sentences)
+- "what_this_means": Plain-English explanation of any issues or next steps
+- "next_steps": Array of simple action items or questions to guide them
+
+ONLY output valid JSON. No other text.
+"""
+
+    def translate_diagnostic(self, diagnostic_json, audience="customer"):
+        """
+        Translates structured diagnostic JSON into human-readable explanations.
+        
+        Args:
+            diagnostic_json: The complete diagnostic result from the engine
+            audience: "customer" or "support" - determines tone and detail level
+            
+        Returns:
+            Dictionary with translated explanations appropriate for the audience
+        """
+        system_prompt = self._get_system_prompt(audience)
+        
+        # Create a cleaned version of the JSON to send (remove sensitive internal data)
+        clean_data = {
+            "domain": diagnostic_json.get("domain"),
+            "platform": diagnostic_json.get("platform"),
+            "is_subdomain": diagnostic_json.get("is_subdomain"),
+            "connection_option": diagnostic_json.get("connection_option"),
+            "is_completed": diagnostic_json.get("is_completed"),
+            "status_message": diagnostic_json.get("status_message"),
+            "warnings": diagnostic_json.get("warnings", []),
+            "conflicts": diagnostic_json.get("conflicts", []),
+            "recommended_actions": diagnostic_json.get("recommended_actions", []),
+            "potential_issues": diagnostic_json.get("potential_issues", []),
+            "email_state": {
+                "has_mx": diagnostic_json.get("email_state", {}).get("has_mx", False),
+                "provider": diagnostic_json.get("email_state", {}).get("provider"),
+                "display_name": diagnostic_json.get("email_state", {}).get("display_name"),
+                "has_spf": diagnostic_json.get("email_state", {}).get("has_spf", False),
+                "has_dmarc": diagnostic_json.get("email_state", {}).get("has_dmarc", False),
+            },
+            "delegate_access": diagnostic_json.get("delegate_access", {}),
+            "comparison": diagnostic_json.get("comparison", [])
+        }
+        
+        user_content = f"""Analyze this DNS diagnostic data and provide {audience}-facing explanation:
+
+{json.dumps(clean_data, indent=2)}
+
+Remember: Only translate what's in the data. Do not invent records or suggest actions beyond what's in recommended_actions."""
 
         try:
             response = self.client.chat.completions.create(
@@ -48,15 +134,42 @@ Do not include any other text in your response, only the raw JSON.
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_content}
                 ],
-                response_format={"type": "json_object"}
+                response_format={"type": "json_object"},
+                temperature=0.3  # Lower temperature for more consistent, bounded responses
             )
             
             ai_result = json.loads(response.choices[0].message.content)
-            return ai_result
-        except Exception as e:
-            return {
-                "error": f"AI translation failed: {str(e)}",
-                "support_summary": "Error generating summary.",
-                "customer_summary": "Error generating summary.",
-                "next_steps": ["Check logs and try again."]
+            
+            # Add metadata about the translation
+            ai_result["_metadata"] = {
+                "audience": audience,
+                "model": self.model,
+                "guardrails_active": True
             }
+            
+            return ai_result
+            
+        except Exception as e:
+            # Fail gracefully
+            if audience == "support":
+                return {
+                    "error": f"AI translation failed: {str(e)}",
+                    "technical_summary": "Error generating AI analysis.",
+                    "issues": [],
+                    "actions_required": [],
+                    "notes": ["AI translation unavailable - refer to raw diagnostic data"]
+                }
+            else:
+                return {
+                    "error": f"AI translation failed: {str(e)}",
+                    "summary": "We completed the diagnostic but couldn't generate a summary. Please review the technical details or contact support.",
+                    "what_this_means": "The system is working, but the explanation service is temporarily unavailable.",
+                    "next_steps": ["Contact support for help understanding these results"]
+                }
+
+    def translate_both(self, diagnostic_json):
+        """Generate both support and customer translations in one call."""
+        return {
+            "support": self.translate_diagnostic(diagnostic_json, audience="support"),
+            "customer": self.translate_diagnostic(diagnostic_json, audience="customer")
+        }

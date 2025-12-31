@@ -1,0 +1,18 @@
+{
+  "NS": [
+    {"host": "@", "value": "ns1.cloudflare.com", "ttl": 3600},
+    {"host": "@", "value": "ns2.cloudflare.com", "ttl": 3600}
+  ],
+  "A": [
+    {"host": "@", "value": "104.21.75.32", "ttl": 300}
+  ],
+  "WWW_A": [
+    {"host": "www", "value": "104.21.75.32", "ttl": 300}
+  ],
+  "MX": [],
+  "TXT": [],
+  "WHOIS": {
+    "registrar": "GoDaddy.com, LLC",
+    "name_servers": ["ns1.cloudflare.com", "ns2.cloudflare.com"]
+  }
+}

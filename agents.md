@@ -1,59 +1,108 @@
 # Agent Framework: DNS Diagnostic Tool
 
-This document serves as a guide for AI agents and developers working on the DNS Diagnostic Tool. It outlines the project structure, development workflows, and coding standards.
+A guide for AI agents and developers working on the DNS Diagnostic Tool.
 
 ## 1. Project Overview
-A hybrid application designed to diagnose DNS configurations and provide guided setup plans for AttractWell and GetOiling platforms.
 
-- **Frontend**: Next.js (TypeScript, Tailwind CSS, Framer Motion) located in `/ui`.
-- **Backend**: Python CLI engine in `/src` for deterministic diagnostics and AI-driven insights.
-- **Integration**: The UI calls the Python engine via a Node.js `child_process` execution in a Next.js API route.
-- **Truth Source**: All platform logic and DNS rules are stored in `domain_rules.yaml`.
-- **Core Philosophy**: 
-  - **Phase 1 (Deterministic Core)**: All diagnostic decisions must be rules-based and driven by `domain_rules.yaml`.
-  - **Phase 2 (AI Translation)**: Use AI to translate structured JSON results into human-friendly explanations. AI is a *translator*, not a *decision-maker*. Never let AI infer DNS records or connection paths; it must only report what the engine found.
+A hybrid application for diagnosing DNS configurations and providing guided setup plans for AttractWell and GetOiling platforms.
+
+- **Frontend**: Next.js (TypeScript, Tailwind CSS v4, Framer Motion) in `/ui`
+- **Backend**: Python CLI engine in `/src` for deterministic diagnostics and AI-driven insights
+- **Integration**: UI calls Python engine via `execFile()` in Next.js API routes
+- **Truth Source**: `domain_rules.yaml` contains all platform logic and DNS rules
+
+### Core Philosophy
+- **Deterministic Core**: All diagnostic decisions are rules-based from `domain_rules.yaml`
+- **AI Translation**: AI translates structured JSON into human-friendly explanations
+- **AI is a translator, not a decision-maker**: Never let AI infer DNS records
 
 ## 2. Build and Test Commands
 
 ### Backend (Python)
-- **Environment**: Use a virtual environment (`python3 -m venv .venv`).
-- **Install Dependencies**: `pip install -r requirements.txt`
-- **CLI Usage**: 
-  ```bash
-  python3 src/main.py --domain example.com --platform attractwell --ai
-  ```
-- **Testing**: Run `pytest` to execute backend unit tests.
+```bash
+# Setup
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+
+# CLI Usage
+python3 src/main.py --domain example.com --platform attractwell --ai
+
+# Testing
+python3 -m pytest tests/test_core.py -v
+```
 
 ### Frontend (Next.js)
-- **Directory**: `cd ui`
-- **Install Dependencies**: `npm install`
-- **Development**: `npm run dev` (runs on [http://localhost:3000](http://localhost:3000))
-- **Build**: `npm run build`
-- **Lint**: `npm run lint`
+```bash
+cd ui
+npm install
+npm run dev     # http://localhost:3000
+npm run build   # Production build
+npm run lint    # Lint check
+```
 
 ## 3. Code Style Guidelines
 
-- **Minimal Commenting**: Do not include comments unless they are 100% required to explain a super complex block of code. Code should be self-documenting through clear naming and structure.
+- **Minimal Commenting**: Only comment complex blocks; code should be self-documenting
 
 ### Python (Backend)
-- **Modularization**: Keep logic isolated. Use `dns_lookup.py` for queries, `decision_engine.py` for logic, and `action_plan_builder.py` for formatting output.
-- **Execution Flow**: `main.py` is the entry point. It must output valid JSON to `stdout` and any diagnostic logs/errors to `stderr`.
-- **Config-Driven**: Never hardcode platform-specific DNS records. Fetch them from `ConfigLoader`.
+- **Modular Design**: `dns_lookup.py` (queries), `decision_engine.py` (logic), `action_plan_builder.py` (output)
+- **Entry Point**: `main.py` outputs JSON to stdout, logs/errors to stderr
+- **Config-Driven**: Never hardcode DNS records; use `ConfigLoader`
 
 ### TypeScript/React (Frontend)
-- **Visuals**: Maintain the "Antigravity" dark theme. Use `framer-motion` for entry animations and transitions.
-- **CSS Strategy**: 
-  - Use Tailwind for utility spacing and layout.
-  - Use semantic classes in `globals.css` for complex components (e.g., `.stat-card`, `.info-panel`, `.action-item`).
-- **State Management**: Use React `useState` and `useEffect` for local UI state. API calls should handle loading/error states gracefully.
+- **Theme**: Dark "Antigravity" theme with `framer-motion` animations
+- **CSS**: Tailwind v4 utilities + semantic classes in `globals.css`
+- **State**: React hooks for local state; graceful loading/error handling
 
-## 4. Testing Instructions
-- **Validating Logic**: When changing `domain_rules.yaml` or the `DecisionEngine`, update or add test cases in `tests/test_core.py`.
-- **Mocking**: Use the fixtures in `tests/fixtures/` to simulate DNS snapshots without making live network calls.
-- **UI Verification**: Ensure the "Action Plan" and "AI Insights" sections render correctly for various scenarios (e.g., missing A record, conflicting MX records).
+## 4. Security Controls (MANDATORY)
 
-## 5. Security Considerations
-- **Environment Secrets**: `OPENAI_API_KEY` must be stored in `.env` and never logged or exposed to the frontend browser directly.
-- **Shell Safety**: The `exec` call in `ui/src/app/api/diagnose/route.ts` uses user-provided domain strings. While simple, ensure domain validation is performed to prevent unexpected shell behavior.
-- **Data Privacy**: Do not store or log WHOIS results or DNS snapshots beyond the immediate request/response cycle.
-- **Injection Safety**: The `exec` call in `ui/src/app/api/diagnose/route.ts` uses user-provided domain strings. While simple, ensure domain validation is performed to prevent unexpected shell behavior. 
+All security vulnerabilities have been addressed. **Do not regress these controls.**
+
+### API Layer (`ui/src/app/api/`)
+| Control | Implementation | File |
+|---------|----------------|------|
+| Command Injection Prevention | `execFile()` with array args | All routes |
+| Input Validation | RFC 1035 regex, whitelists | All routes |
+| SSRF Protection | Blocked internal domains | `diagnose/route.ts` |
+| Rate Limiting | Per-IP limits | `lib/rate-limiter.ts` |
+| Session Management | TTL, max count, cleanup | `chat/route.ts` |
+| Error Sanitization | No path leakage | All routes |
+
+### DNS Layer (`src/dns_lookup.py`)
+| Control | Value | Purpose |
+|---------|-------|---------|
+| `DEFAULT_TIMEOUT` | 5.0s | Per-server timeout |
+| `DEFAULT_LIFETIME` | 15.0s | Total query timeout |
+| `MAX_RECORDS_PER_TYPE` | 100 | Prevent memory exhaustion |
+| `CNAME_DEPTH_LIMIT` | 5 | Prevent infinite loops |
+| Domain validation | RFC 1035 | Block malformed input |
+| SSRF blocking | Internal TLDs | Block `.local`, `.corp`, etc. |
+
+### Rate Limits
+- Diagnose endpoint: 10 requests/minute per IP
+- Chat endpoint: 30 requests/minute per IP
+
+## 5. Testing Instructions
+
+- **Logic Changes**: Update tests in `tests/test_core.py`
+- **Mocking**: Use fixtures in `tests/fixtures/`
+- **UI Verification**: Check "Action Plan" and "AI Insights" render correctly
+- **Security**: Never bypass input validation or rate limiting
+
+## 6. API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/diagnose` | POST | Run DNS diagnostic |
+| `/api/chat` | POST | Conversational AI chat |
+| `/api/health` | GET | Health check for monitoring |
+
+## 7. Environment Variables
+
+```bash
+# Required for AI features
+OPENAI_API_KEY=sk-...
+```
+
+Store in `.env` file (never commit to git).

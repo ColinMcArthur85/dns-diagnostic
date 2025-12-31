@@ -14,7 +14,7 @@ from src.action_plan_builder import ActionPlanBuilder
 from src.ai_translator import AITranslator
 
 def main():
-    parser = argparse.ArgumentParser(description="DNS Diagnostic Tool (Phase 1)")
+    parser = argparse.ArgumentParser(description="DNS Diagnostic Tool (Phase 2)")
     parser.add_argument("--domain", required=True, help="Domain to analyze")
     parser.add_argument("--platform", required=True, choices=['attractwell', 'aw', 'getoiling', 'go'], help="Target platform")
     
@@ -26,7 +26,11 @@ def main():
     parser.add_argument("--comfortable", action="store_true", dest="comfortable_editing_dns", help="User is comfortable editing DNS")
     parser.add_argument("--registrar-known", action="store_true", dest="registrar_known", help="User knows their registrar")
     parser.add_argument("--delegate-dns", action="store_true", dest="delegate_dns_management", help="Wants us to manage DNS")
+    
+    # Phase 2: AI translation options
     parser.add_argument("--ai", action="store_true", help="Enable AI-generated summaries and next steps")
+    parser.add_argument("--ai-audience", choices=['customer', 'support', 'both'], default='customer', help="AI explanation audience (Phase 2)")
+    
     parser.add_argument("--sections", nargs="+", help="Specific DNS sections or records to check (e.g. web, email, A, MX)")
 
     args = parser.parse_args()
@@ -89,12 +93,19 @@ def main():
     builder = ActionPlanBuilder(config)
     final_plan = builder.build_plan(decision, snapshot, email_state)
 
-    # 6. AI Translation (Optional)
+    # 6. AI Translation (Optional - Phase 2)
     if args.ai:
-        print(f"Generating AI insights for {args.domain}...", file=sys.stderr)
+        print(f"Generating AI insights for {args.domain} (audience: {args.ai_audience})...", file=sys.stderr)
         try:
             translator = AITranslator()
-            ai_insights = translator.translate_diagnostic(final_plan)
+            
+            if args.ai_audience == 'both':
+                # Phase 2: Generate both support and customer translations
+                ai_insights = translator.translate_both(final_plan)
+            else:
+                # Single audience translation
+                ai_insights = translator.translate_diagnostic(final_plan, audience=args.ai_audience)
+                
             final_plan["ai_insights"] = ai_insights
         except Exception as e:
             final_plan["ai_insights"] = {"error": str(e)}

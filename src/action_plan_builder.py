@@ -8,15 +8,20 @@ class ActionPlanBuilder:
         # Determine the key to look for in dns_snapshot
         lookup_key = rec_type
         if host == "www":
-            if rec_type == "CNAME":
-                lookup_key = "WWW_CNAME"
-            elif rec_type == "A":
-                lookup_key = "WWW_A"
+            lookup_key = "WWW_CNAME" if rec_type == "CNAME" else "WWW_A"
         
         records = dns_snapshot.get(lookup_key, [])
         target = target_value.rstrip('.').lower()
         
         for r in records:
+            # For non-specific keys (A, CNAME), check that the host matches the full domain
+            if lookup_key in ['A', 'CNAME', 'MX', 'TXT', 'DMARC', 'NS']:
+                r_host = r.get('host', '').rstrip('.').lower()
+                query_host = domain.rstrip('.').lower()
+                # Accept full domain or '@' for root records
+                if r_host != query_host and r_host != '@':
+                    continue
+                    
             current_val = r.get('value', '').rstrip('.').lower()
             if current_val == target:
                 return True
@@ -25,6 +30,7 @@ class ActionPlanBuilder:
     def _build_comparison(self, decision, dns_snapshot, platform_rules, option_key):
         comparison = []
         is_sub = decision['is_subdomain']
+        domain = decision['domain']
         
         # 1. Nameservers (Always show if NS or WHOIS present)
         current_ns = dns_snapshot.get('NS', [])
@@ -53,25 +59,24 @@ class ActionPlanBuilder:
 
         # 2. Main Connection Records
         if is_sub:
-            import tldextract
-            extracted = tldextract.extract(decision['domain'])
-            host = extracted.subdomain
             sub_config = platform_rules.get('subdomain', {})
             target = sub_config.get('target')
             
-            # Only show if CNAME was queried
-            if 'CNAME' in dns_snapshot or 'WWW_CNAME' in dns_snapshot:
-                exists = self._is_record_match(dns_snapshot, "CNAME", host, target, decision['domain'])
-                current_cnames = [r.get('value', '').rstrip('.') for r in dns_snapshot.get('CNAME', []) if r.get('host') == host]
-                status = "matched" if exists else ("conflict" if current_cnames else "missing")
-                
-                comparison.append({
-                    "label": f"CNAME ({host})",
-                    "current": ", ".join(current_cnames) if current_cnames else "None detected",
-                    "target": target,
-                    "status": status,
-                    "is_required": True
-                })
+            # Use full domain for matching subdomain records
+            exists = self._is_record_match(dns_snapshot, "CNAME", None, target, domain)
+            current_cnames = [r.get('value', '').rstrip('.') for r in dns_snapshot.get('CNAME', []) 
+                             if r.get('host', '').rstrip('.').lower() == domain.rstrip('.').lower()
+                             or r.get('host', '') == domain.split('.')[0]]
+            
+            status = "matched" if exists else ("conflict" if current_cnames else "missing")
+            
+            comparison.append({
+                "label": f"CNAME ({domain})",
+                "current": ", ".join(current_cnames) if current_cnames else "None detected",
+                "target": target,
+                "status": status,
+                "is_required": True
+            })
         else:
             root_opts = platform_rules.get('root_domain', {})
             opt_2_config = root_opts.get('option_2', {})
@@ -86,10 +91,18 @@ class ActionPlanBuilder:
                 if lookup_key in dns_snapshot or rec['type'] in dns_snapshot:
                     val = rec['value']
                     if val == "{root_domain}":
-                        val = decision['domain']
+                        val = domain
                     
-                    exists = self._is_record_match(dns_snapshot, rec['type'], rec['host'], val, decision['domain'])
-                    current_records = dns_snapshot.get(lookup_key, [])
+                    exists = self._is_record_match(dns_snapshot, rec['type'], rec['host'], val, domain)
+                    
+                    # Get values for display
+                    if lookup_key in ['WWW_CNAME', 'WWW_A']:
+                        current_records = dns_snapshot.get(lookup_key, [])
+                    else:
+                        current_records = [r for r in dns_snapshot.get(rec['type'], []) 
+                                         if r.get('host', '').rstrip('.').lower() == domain.rstrip('.').lower()
+                                         or r.get('host', '') == '@']
+                        
                     current_vals = [r.get('value', '').rstrip('.') for r in current_records]
                     status = "matched" if exists else ("conflict" if current_vals else "missing")
                     
@@ -125,11 +138,16 @@ class ActionPlanBuilder:
         # 4. Diagnostics
         if 'DMARC' in dns_snapshot:
             dmarc = decision.get('email_state', {}).get('dmarc_record')
+            status = "matched" if dmarc else "info"
+            # Recommendation: quarantine or reject is ideal for security
+            if dmarc and "p=none" in dmarc.lower():
+                status = "info"
+            
             comparison.append({
                 "label": "DMARC Record",
                 "current": dmarc if dmarc else "None detected",
                 "target": "p=quarantine (Recommended)",
-                "status": "matched" if dmarc else "info",
+                "status": status,
                 "is_required": False
             })
 
@@ -166,15 +184,17 @@ class ActionPlanBuilder:
 
     def build_plan(self, decision, dns_snapshot, email_state):
         queried_sections = decision.get('intent', {}).get('queried_sections')
+        domain = decision['domain']
         
         plan = {
-            "domain": decision['domain'],
+            "domain": domain,
             "platform": decision['platform'],
             "is_subdomain": decision['is_subdomain'],
             "dns_snapshot": dns_snapshot,
             "email_state": email_state,
             "connection_option": decision['connection_option'],
             "warnings": decision['warnings'],
+            "conflicts": decision.get('conflicts', []),
             "delegate_access": decision['delegate_access'],
             "recommended_actions": [],
             "potential_issues": [], # For records not queried but potentially missing
@@ -198,20 +218,20 @@ class ActionPlanBuilder:
         suggestions = []
         
         if decision['is_subdomain']:
-            import tldextract
-            extracted = tldextract.extract(decision['domain'])
-            host = extracted.subdomain
             sub_config = platform_rules.get('subdomain', {})
             target = sub_config.get('target')
             
-            if not self._is_record_match(dns_snapshot, "CNAME", host, target, decision['domain']):
+            if not self._is_record_match(dns_snapshot, "CNAME", None, target, domain):
+                import tldextract
+                extracted = tldextract.extract(domain)
+                host_label = extracted.subdomain
                 action = {
                     "action": "add_record",
                     "type": "CNAME",
-                    "host": host,
+                    "host": host_label,
                     "value": target
                 }
-                if self._was_record_queried('CNAME', host, queried_sections):
+                if self._was_record_queried('CNAME', host_label, queried_sections):
                     actions.append(action)
                 else:
                     suggestions.append(action)
@@ -244,9 +264,9 @@ class ActionPlanBuilder:
                 for rec in records:
                     val = rec['value']
                     if val == "{root_domain}":
-                        val = decision['domain']
+                        val = domain
                     
-                    if not self._is_record_match(dns_snapshot, rec['type'], rec['host'], val, decision['domain']):
+                    if not self._is_record_match(dns_snapshot, rec['type'], rec['host'], val, domain):
                         action = {
                             "action": "add_record",
                             "type": rec['type'],
@@ -261,14 +281,18 @@ class ActionPlanBuilder:
         plan['recommended_actions'] = actions
         plan['potential_issues'] = suggestions
         
-        if not actions:
+        # FIX: Domain is only completed if there are NO recommendations AND NO (blocking) conflicts
+        # We allow non-blocking info-level conflicts (like NS mismatch if everything matches)
+        blocking_conflicts = [c for c in plan['conflicts'] if c.get('blocking', True)]
+        
+        if not actions and not blocking_conflicts:
             plan['is_completed'] = True
-            platform_id = platform_rules.get('id', decision['platform']).upper()
+            platform_name = platform_rules.get('display_name', decision['platform']).upper()
             
             if queried_sections and 'all' not in queried_sections:
                 sections_str = ", ".join(queried_sections)
                 plan['status_message'] = f"The requested {sections_str} records are correctly configured."
             else:
-                plan['status_message'] = f"This domain is connected to {platform_id}, and is completed."
+                plan['status_message'] = f"Success! Your domain is correctly connected to {platform_name}."
             
         return plan

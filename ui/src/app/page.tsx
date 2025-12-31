@@ -2,7 +2,8 @@
 
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Shield, Info, ArrowRight, CheckCircle, AlertTriangle, Terminal, Globe, Mail } from 'lucide-react';
+import { Search, Shield, Info, ArrowRight, CheckCircle, AlertTriangle, Terminal, Globe, Mail, Copy, Check, MessageCircle } from 'lucide-react';
+import ChatInterface from './components/ChatInterface';
 
 export default function Home() {
   const [domain, setDomain] = useState('');
@@ -11,6 +12,19 @@ export default function Home() {
   const [result, setResult] = useState<any>(null);
   const [selectedSections, setSelectedSections] = useState<string[]>(['all']);
   const [error, setError] = useState<string | null>(null);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [aiAudience, setAiAudience] = useState<'customer' | 'support' | 'both'>('customer');
+  const [activeAiTab, setActiveAiTab] = useState<'customer' | 'support'>('customer');
+  const [showChat, setShowChat] = useState(false);  // Phase 3: Chat interface
+  
+  // Intent questions
+  const [intent, setIntent] = useState({
+    has_external_dependencies: false,
+    email_managed_by_platform: false,
+    comfortable_editing_dns: true,
+    registrar_known: true,
+    delegate_dns_management: false,
+  });
 
   const availableSections = [
     { id: 'all', label: 'All Records', icon: <Globe size={14} /> },
@@ -52,7 +66,13 @@ export default function Home() {
       const res = await fetch('/api/diagnose', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ domain, platform, sections: selectedSections }),
+        body: JSON.stringify({ 
+          domain, 
+          platform, 
+          sections: selectedSections,
+          intent,
+          ai_audience: aiAudience  // Phase 2: Send audience parameter
+        }),
       });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
@@ -142,6 +162,153 @@ export default function Home() {
               </button>
             ))}
           </motion.div>
+
+          {/* Advanced Options Toggle */}
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.5 }}
+            className="text-center"
+          >
+            <button
+              onClick={() => setShowAdvanced(!showAdvanced)}
+              className="text-sm text-gray-500 hover:text-gray-300 transition-colors inline-flex items-center gap-2"
+            >
+              <Info size={14} />
+              {showAdvanced ? 'Hide' : 'Show'} Advanced Options
+            </button>
+          </motion.div>
+
+          {/* Advanced Options Panel */}
+          <AnimatePresence>
+            {showAdvanced && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="max-w-2xl mx-auto overflow-hidden"
+              >
+                <div className="p-6 bg-[#161616] border border-[#262626] rounded-2xl space-y-4">
+                  <h3 className="text-sm font-bold text-gray-300 mb-4 flex items-center gap-2">
+                    <Shield size={16} />
+                    Connection Configuration
+                  </h3>
+                  
+                  <div className="space-y-3">
+                    <label className="flex items-start gap-3 cursor-pointer group">
+                      <input
+                        type="checkbox"
+                        checked={intent.has_external_dependencies}
+                        onChange={(e) => setIntent({ ...intent, has_external_dependencies: e.target.checked })}
+                        className="mt-0.5 w-4 h-4 rounded border-gray-600 bg-[#0d0d0d] text-blue-600 focus:ring-2 focus:ring-blue-500/50"
+                      />
+                      <div className="flex-1">
+                        <div className="text-sm text-gray-300 group-hover:text-white transition-colors">
+                          Domain has external dependencies (email, services, subdomains)
+                        </div>
+                        <div className="text-xs text-gray-500 mt-0.5">
+                          Check this if you're using third-party services that rely on DNS records
+                        </div>
+                      </div>
+                    </label>
+
+                    <label className="flex items-start gap-3 cursor-pointer group">
+                      <input
+                        type="checkbox"
+                        checked={intent.email_managed_by_platform}
+                        onChange={(e) => setIntent({ ...intent, email_managed_by_platform: e.target.checked })}
+                        className="mt-0.5 w-4 h-4 rounded border-gray-600 bg-[#0d0d0d] text-blue-600 focus:ring-2 focus:ring-blue-500/50"
+                      />
+                      <div className="flex-1">
+                        <div className="text-sm text-gray-300 group-hover:text-white transition-colors">
+                          Email is managed by our platform
+                        </div>
+                        <div className="text-xs text-gray-500 mt-0.5">
+                          Check this if email hosting is handled by AttractWell/GetOiling
+                        </div>
+                      </div>
+                    </label>
+
+                    <label className="flex items-start gap-3 cursor-pointer group">
+                      <input
+                        type="checkbox"
+                        checked={intent.comfortable_editing_dns}
+                        onChange={(e) => setIntent({ ...intent, comfortable_editing_dns: e.target.checked })}
+                        className="mt-0.5 w-4 h-4 rounded border-gray-600 bg-[#0d0d0d] text-blue-600 focus:ring-2 focus:ring-blue-500/50"
+                      />
+                      <div className="flex-1">
+                        <div className="text-sm text-gray-300 group-hover:text-white transition-colors">
+                          Comfortable editing DNS records
+                        </div>
+                        <div className="text-xs text-gray-500 mt-0.5">
+                          Uncheck if you need help with DNS configuration
+                        </div>
+                      </div>
+                    </label>
+
+                    <label className="flex items-start gap-3 cursor-pointer group">
+                      <input
+                        type="checkbox"
+                        checked={intent.registrar_known}
+                        onChange={(e) => setIntent({ ...intent, registrar_known: e.target.checked })}
+                        className="mt-0.5 w-4 h-4 rounded border-gray-600 bg-[#0d0d0d] text-blue-600 focus:ring-2 focus:ring-blue-500/50"
+                      />
+                      <div className="flex-1">
+                        <div className="text-sm text-gray-300 group-hover:text-white transition-colors">
+                          I know my domain registrar
+                        </div>
+                        <div className="text-xs text-gray-500 mt-0.5">
+                          Uncheck if you're unsure where your domain is registered
+                        </div>
+                      </div>
+                    </label>
+
+                    <label className="flex items-start gap-3 cursor-pointer group">
+                      <input
+                        type="checkbox"
+                        checked={intent.delegate_dns_management}
+                        onChange={(e) => setIntent({ ...intent, delegate_dns_management: e.target.checked })}
+                        className="mt-0.5 w-4 h-4 rounded border-gray-600 bg-[#0d0d0d] text-blue-600 focus:ring-2 focus:ring-blue-500/50"
+                      />
+                      <div className="flex-1">
+                        <div className="text-sm text-gray-300 group-hover:text-white transition-colors">
+                          I want you to manage DNS for me
+                        </div>
+                        <div className="text-xs text-gray-500 mt-0.5">
+                          We can handle the DNS configuration on your behalf
+                        </div>
+                      </div>
+                    </label>
+
+                    {/* Phase 2: AI Audience Selector */}
+                    <div className="pt-4 border-t border-[#262626]">
+                      <label className="block">
+                        <div className="flex items-center gap-2 mb-3">
+                          <Terminal size={14} className="text-purple-400" />
+                          <span className="text-sm font-bold text-gray-300">AI Explanation Mode (Phase 2)</span>
+                          <span className="bg-purple-500/10 text-purple-400 text-[8px] font-bold px-1.5 py-0.5 rounded uppercase">
+                            New
+                          </span>
+                        </div>
+                        <select
+                          value={aiAudience}
+                          onChange={(e) => setAiAudience(e.target.value as 'customer' | 'support' | 'both')}
+                          className="w-full px-3 py-2 bg-[#0d0d0d] border border-gray-600 rounded-lg text-gray-300 text-sm focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500"
+                        >
+                          <option value="customer">Customer-Friendly (Plain English)</option>
+                          <option value="support">Support Staff (Technical Details)</option>
+                          <option value="both">Both Views (Toggle Between Them)</option>
+                        </select>
+                        <div className="text-xs text-gray-500 mt-2">
+                          Controls how AI explains the results. Customer view uses simple language, Support view includes technical details.
+                        </div>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
 
@@ -280,35 +447,174 @@ export default function Home() {
               </div>
             )}
 
-            {/* AI Analysis Section */}
-            {result.ai_insights?.summary && (
-              <div className="insight-panel">
-                <div className="panel-label text-blue-400">
-                  <Terminal size={14} />
-                  AI Analysis
-                </div>
-                <div className="text-gray-300 leading-relaxed text-sm font-mono whitespace-pre-wrap">
-                  {result.ai_insights.summary}
-                </div>
-              </div>
-            )}
-
-            {/* Next Steps Section */}
-            {result.ai_insights?.next_steps && Array.isArray(result.ai_insights.next_steps) && (
-              <div className="info-panel">
-                <h3 className="text-blue-400 font-bold mb-6 flex items-center gap-2">
-                  <ArrowRight size={20} />
-                  Recommended Next Steps
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {result.ai_insights.next_steps.map((step: string, i: number) => (
-                    <div key={i} className="flex items-start gap-4 p-4 bg-[#161616]/50 border border-[#262626] rounded-xl">
-                      <div className="w-6 h-6 rounded-full bg-blue-600/20 text-blue-400 flex items-center justify-center text-xs font-bold shrink-0">
-                        {i + 1}
-                      </div>
-                      <p className="text-gray-300 text-sm leading-relaxed">{step}</p>
+            {/* Phase 2: AI Analysis Section with Support/Customer Toggle */}
+            {(result.ai_insights?.summary || result.ai_insights?.support || result.ai_insights?.customer) && (
+              <div className="card overflow-hidden">
+                <div className="card-header">
+                  <div className="flex items-center gap-3">
+                    <Terminal className="text-blue-400" size={20} />
+                    <h3 className="font-bold text-lg">AI Analysis</h3>
+                    <span className="bg-purple-500/10 text-purple-400 text-[9px] font-bold px-2 py-0.5 rounded uppercase tracking-wider">
+                      Phase 2
+                    </span>
+                  </div>
+                  
+                  {/* Tabs for Support vs Customer view (if both are available) */}
+                  {result.ai_insights?.support && result.ai_insights?.customer && (
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setActiveAiTab('customer')}
+                        className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
+                          activeAiTab === 'customer'
+                            ? 'bg-blue-600/20 text-blue-400 border border-blue-500/50'
+                            : 'bg-[#161616] text-gray-500 border border-[#262626] hover:text-gray-300'
+                        }`}
+                      >
+                        Customer View
+                      </button>
+                      <button
+                        onClick={() => setActiveAiTab('support')}
+                        className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
+                          activeAiTab === 'support'
+                            ? 'bg-purple-600/20 text-purple-400 border border-purple-500/50'
+                            : 'bg-[#161616] text-gray-500 border border-[#262626] hover:text-gray-300'
+                        }`}
+                      >
+                        Support View
+                      </button>
                     </div>
-                  ))}
+                  )}
+                </div>
+                
+                <div className="card-body space-y-6">
+                  {/* Show single-audience results (legacy format or single mode) */}
+                  {result.ai_insights?.summary && !result.ai_insights?.support && (
+                    <>
+                      <div className="text-gray-300 leading-relaxed text-sm">
+                        {result.ai_insights.summary}
+                      </div>
+                      {result.ai_insights.next_steps && Array.isArray(result.ai_insights.next_steps) && (
+                        <div className="space-y-2">
+                          <div className="text-xs uppercase tracking-wider text-gray-500 font-bold">Next Steps</div>
+                          <div className="grid grid-cols-1 gap-2">
+                            {result.ai_insights.next_steps.map((step: string, i: number) => (
+                              <div key={i} className="flex items-start gap-3 p-3 bg-[#161616]/50 border border-[#262626] rounded-lg">
+                                <div className="w-5 h-5 rounded-full bg-blue-600/20 text-blue-400 flex items-center justify-center text-xs font-bold shrink-0">
+                                  {i + 1}
+                                </div>
+                                <p className="text-gray-300 text-sm leading-relaxed">{step}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {/* Customer View */}
+                  {result.ai_insights?.customer && (activeAiTab === 'customer' || !result.ai_insights?.support) && (
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-2 mb-3">
+                        <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                        <span className="text-xs text-gray-500 uppercase tracking-wider font-bold">Customer-Friendly Explanation</span>
+                      </div>
+                      
+                      {result.ai_insights.customer.summary && (
+                        <div className="text-gray-300 leading-relaxed">{result.ai_insights.customer.summary}</div>
+                      )}
+                      
+                      {result.ai_insights.customer.what_this_means && (
+                        <div className="p-4 bg-blue-950/20 border border-blue-500/20 rounded-lg">
+                          <div className="text-xs text-blue-400 font-bold mb-2">What This Means</div>
+                          <div className="text-gray-300 text-sm leading-relaxed">{result.ai_insights.customer.what_this_means}</div>
+                        </div>
+                      )}
+                      
+                      {result.ai_insights.customer.next_steps && Array.isArray(result.ai_insights.customer.next_steps) && result.ai_insights.customer.next_steps.length > 0 && (
+                        <div className="space-y-2">
+                          <div className="text-xs uppercase tracking-wider text-gray-500 font-bold">Next Steps</div>
+                          <div className="grid grid-cols-1 gap-2">
+                            {result.ai_insights.customer.next_steps.map((step: string, i: number) => (
+                              <div key={i} className="flex items-start gap-3 p-3 bg-[#161616]/50 border border-[#262626] rounded-lg">
+                                <div className="w-5 h-5 rounded-full bg-blue-600/20 text-blue-400 flex items-center justify-center text-xs font-bold shrink-0">
+                                  {i + 1}
+                                </div>
+                                <p className="text-gray-300 text-sm leading-relaxed">{step}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Support View */}
+                  {result.ai_insights?.support && activeAiTab === 'support' && (
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-2 mb-3">
+                        <div className="w-2 h-2 rounded-full bg-purple-500"></div>
+                        <span className="text-xs text-gray-500 uppercase tracking-wider font-bold">Technical Summary for Support Staff</span>
+                      </div>
+                      
+                      {result.ai_insights.support.technical_summary && (
+                        <div className="p-4 bg-purple-950/20 border border-purple-500/20 rounded-lg">
+                          <div className="text-purple-400 font-mono text-sm leading-relaxed">{result.ai_insights.support.technical_summary}</div>
+                        </div>
+                      )}
+                      
+                      {result.ai_insights.support.issues && Array.isArray(result.ai_insights.support.issues) && result.ai_insights.support.issues.length > 0 && (
+                        <div className="space-y-2">
+                          <div className="text-xs uppercase tracking-wider text-gray-500 font-bold">Issues Detected</div>
+                          <div className="space-y-2">
+                            {result.ai_insights.support.issues.map((issue: string, i: number) => (
+                              <div key={i} className="flex items-start gap-3 p-3 bg-red-950/20 border border-red-500/30 rounded-lg">
+                                <AlertTriangle size={16} className="text-red-400 shrink-0 mt-0.5" />
+                                <p className="text-gray-300 text-sm leading-relaxed">{issue}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {result.ai_insights.support.actions_required && Array.isArray(result.ai_insights.support.actions_required) && result.ai_insights.support.actions_required.length > 0 && (
+                        <div className="space-y-2">
+                          <div className="text-xs uppercase tracking-wider text-gray-500 font-bold">Actions Required</div>
+                          <div className="grid grid-cols-1 gap-2">
+                            {result.ai_insights.support.actions_required.map((action: string, i: number) => (
+                              <div key={i} className="flex items-start gap-3 p-3 bg-[#161616]/50 border border-[#262626] rounded-lg">
+                                <div className="w-5 h-5 rounded-full bg-green-600/20 text-green-400 flex items-center justify-center text-xs font-bold shrink-0">
+                                  {i + 1}
+                                </div>
+                                <p className="text-gray-300 text-sm font-mono leading-relaxed">{action}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {result.ai_insights.support.notes && Array.isArray(result.ai_insights.support.notes) && result.ai_insights.support.notes.length > 0 && (
+                        <div className="space-y-2">
+                          <div className="text-xs uppercase tracking-wider text-gray-500 font-bold">Support Notes</div>
+                          <div className="space-y-1">
+                            {result.ai_insights.support.notes.map((note: string, i: number) => (
+                              <div key={i} className="flex items-start gap-2 text-sm text-gray-400">
+                                <Info size={14} className="shrink-0 mt-0.5" />
+                                <span>{note}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  
+                  {/* Guardrails indicator */}
+                  {result.ai_insights?._metadata?.guardrails_active && (
+                    <div className="text-[10px] text-gray-600 italic flex items-center gap-2 pt-2 border-t border-[#262626]">
+                      <Shield size={12} />
+                      Phase 2 Guardrails Active: AI is bounded to diagnostic data only
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -323,30 +629,9 @@ export default function Home() {
                   </h3>
                   <span className="bg-green-500/10 text-green-500 text-[10px] font-bold px-2 py-1 rounded uppercase">Priority: High</span>
                 </div>
-                <div className="card-body space-y-4">
+                <div className="card-body space-y-6">
                   {result.recommended_actions.map((action: any, idx: number) => (
-                    <div key={idx} className="action-item">
-                      <div className="action-number">
-                        {idx + 1}
-                      </div>
-                      <div>
-                        {action.action === 'change_nameservers' ? (
-                          <>
-                            <div className="font-semibold text-gray-200">Update Nameservers</div>
-                            <div className="font-mono text-sm text-gray-500 whitespace-pre-wrap">
-                              Set nameservers to: <span className="text-blue-300">{Array.isArray(action.values) ? action.values.join(', ') : action.values}</span>
-                            </div>
-                          </>
-                        ) : (
-                          <>
-                            <div className="font-semibold text-gray-200">{action.type} Record</div>
-                            <div className="font-mono text-sm text-gray-500">
-                              Host: <span className="text-blue-300">{action.host}</span> → Value: <span className="text-purple-300">{action.value}</span>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    </div>
+                    <ActionItem key={idx} action={action} idx={idx} />
                   ))}
                 </div>
               </div>
@@ -354,7 +639,134 @@ export default function Home() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Phase 3: Floating Chat Button */}
+      {result && !showChat && (
+        <motion.button
+          initial={{ scale: 0, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ delay: 0.5 }}
+          onClick={() => setShowChat(true)}
+          className="fixed bottom-6 right-6 w-14 h-14 bg-linear-to-br from-purple-600 to-blue-600 rounded-full shadow-2xl flex items-center justify-center hover:scale-110 transition-transform z-40 group"
+          title="Ask questions about this diagnostic"
+        >
+          <MessageCircle size={24} className="text-white" />
+          <span className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-[#0d0d0d] animate-pulse"></span>
+          <div className="absolute top-0 right-0 -mr-2 -mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="bg-black/90 text-white text-xs px-3 py-1.5 rounded-lg whitespace-nowrap shadow-xl">
+              Ask questions (Phase 3)
+            </div>
+          </div>
+        </motion.button>
+      )}
+
+      {/* Phase 3: Chat Interface */}
+      {showChat && result && (
+        <ChatInterface
+          diagnosticData={result}
+          audience={aiAudience === 'both' ? activeAiTab : aiAudience}
+          onClose={() => setShowChat(false)}
+        />
+      )}
     </main>
+  );
+}
+
+function ActionItem({ action, idx }: { action: any, idx: number }) {
+  const [copied, setCopied] = useState(false);
+  
+  const handleCopy = (text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="action-item">
+        <div className="action-number">
+          {idx + 1}
+        </div>
+        <div className="flex-1">
+          {action.action === 'change_nameservers' ? (
+            <>
+              <div className="font-semibold text-gray-200 mb-2">Update Nameservers</div>
+              <div className="font-mono text-sm text-gray-500">
+                Set nameservers to: <span className="text-blue-300">{Array.isArray(action.values) ? action.values.join(', ') : action.values}</span>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="font-semibold text-gray-200 mb-2">Add {action.type} Record</div>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div>
+                  <span className="text-gray-500">Type:</span> <span className="text-blue-300 font-mono">{action.type}</span>
+                </div>
+                <div>
+                  <span className="text-gray-500">Host:</span> <span className="text-blue-300 font-mono">{action.host}</span>
+                </div>
+                <div className="col-span-2">
+                  <span className="text-gray-500">Value:</span> <span className="text-purple-300 font-mono">{action.value}</span>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Copy/Paste Block */}
+      <div className="ml-11 relative group">
+        <div className="bg-[#0d0d0d] border border-[#262626] rounded-lg p-4 hover:border-blue-500/30 transition-colors">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex-1 space-y-1">
+              <div className="text-[10px] uppercase tracking-wider text-gray-500 font-bold mb-2">Ready to Copy</div>
+              {action.action === 'change_nameservers' ? (
+                <div className="space-y-1">
+                  {(Array.isArray(action.values) ? action.values : [action.values]).map((ns: string, i: number) => (
+                    <div key={i} className="font-mono text-sm text-blue-300">
+                      {ns}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  <div className="font-mono text-xs">
+                    <span className="text-gray-500">Type:</span> <span className="text-blue-300">{action.type}</span>
+                  </div>
+                  <div className="font-mono text-xs">
+                    <span className="text-gray-500">Name/Host:</span> <span className="text-blue-300">{action.host}</span>
+                  </div>
+                  <div className="font-mono text-xs">
+                    <span className="text-gray-500">Value/Target:</span> <span className="text-purple-300">{action.value}</span>
+                  </div>
+                  {action.type === 'MX' && (
+                    <div className="font-mono text-xs">
+                      <span className="text-gray-500">Priority:</span> <span className="text-blue-300">10</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            <button
+              onClick={() => {
+                const copyText = action.action === 'change_nameservers' 
+                  ? (Array.isArray(action.values) ? action.values.join('\n') : action.values)
+                  : `Type: ${action.type}\nHost: ${action.host}\nValue: ${action.value}`;
+                handleCopy(copyText);
+              }}
+              className="shrink-0 p-2 bg-blue-600/10 hover:bg-blue-600/20 border border-blue-500/30 rounded-lg transition-all group-hover:border-blue-500/50"
+              title="Copy to clipboard"
+            >
+              {copied ? (
+                <Check size={16} className="text-green-400" />
+              ) : (
+                <Copy size={16} className="text-blue-400" />
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 

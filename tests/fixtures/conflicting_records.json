@@ -1,0 +1,21 @@
+{
+  "NS": [
+    {"host": "@", "value": "ns.liquidweb.com", "ttl": 3600},
+    {"host": "@", "value": "ns1.liquidweb.com", "ttl": 3600}
+  ],
+  "A": [
+    {"host": "@", "value": "104.21.75.32", "ttl": 300}
+  ],
+  "WWW_CNAME": [
+    {"host": "www", "value": "example.com", "ttl": 300}
+  ],
+  "WWW_A": [
+    {"host": "www", "value": "192.168.1.1", "ttl": 300}
+  ],
+  "MX": [],
+  "TXT": [],
+  "WHOIS": {
+    "registrar": "GoDaddy.com, LLC",
+    "name_servers": ["ns.liquidweb.com", "ns1.liquidweb.com"]
+  }
+}

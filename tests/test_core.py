@@ -217,5 +217,106 @@ class TestCore(unittest.TestCase):
         self.assertTrue(decision['is_subdomain'])
         self.assertEqual(decision['connection_option'], 'cname_only')
 
+    def test_action_plan_with_conflicts(self):
+        """Test that action plan detects conflicting A/CNAME records"""
+        from action_plan_builder import ActionPlanBuilder
+        
+        builder = ActionPlanBuilder(self.config)
+        engine = DecisionEngine(self.config)
+        
+        # Setup: www has both A and CNAME (conflict)
+        # Also has MX to force option_2 (record-level changes)
+        dns_snapshot = {
+            'NS': [{'host': 'example.com', 'value': 'ns.liquidweb.com', 'ttl': 3600}],
+            'A': [{'host': 'example.com', 'value': '199.189.226.101', 'ttl': 300}],
+            'WWW_A': [{'host': 'www.example.com', 'value': '192.168.1.1', 'ttl': 300}],
+            'WWW_CNAME': [], # Ensure WWW_CNAME is missing so WWW_A triggers a conflict
+            'MX': [{'priority': 10, 'value': 'aspmx.l.google.com'}],
+            'TXT': []
+        }
+        
+        intent = {
+            "has_external_dependencies": True,  # Force option_2
+            "registrar_known": True,
+            "comfortable_editing_dns": True
+        }
+        email_state = {"has_mx": True, "provider": "google_workspace"}
+        
+        decision = engine.evaluate("example.com", "attractwell", intent, email_state, dns_snapshot)
+        plan = builder.build_plan(decision, dns_snapshot, email_state)
+        
+        # Should have conflicts
+        self.assertIn('conflicts', plan)
+        self.assertTrue(len(plan['conflicts']) > 0, "Should detect conflicting records")
+        
+        # Should have a conflict about A/CNAME
+        conflict_types = [c['type'] for c in plan['conflicts']]
+        self.assertIn('record_conflict', conflict_types)
+
+    def test_action_plan_completion_detection(self):
+        """Test that action plan correctly identifies when domain is already configured"""
+        from action_plan_builder import ActionPlanBuilder
+        
+        builder = ActionPlanBuilder(self.config)
+        engine = DecisionEngine(self.config)
+        
+        # Setup: Domain already has correct records
+        dns_snapshot = {
+            'NS': [
+                {'host': 'example.com', 'value': 'ns.liquidweb.com', 'ttl': 3600},
+                {'host': 'example.com', 'value': 'ns1.liquidweb.com', 'ttl': 3600}
+            ],
+            'A': [{'host': 'example.com', 'value': '199.189.226.101', 'ttl': 300}],
+            'WWW_CNAME': [{'host': 'www.example.com', 'value': 'example.com', 'ttl': 300}],
+            'MX': [],
+            'TXT': []
+        }
+        
+        intent = {
+            "has_external_dependencies": False,
+            "registrar_known": True,
+            "comfortable_editing_dns": True
+        }
+        email_state = {"has_mx": False}
+        
+        decision = engine.evaluate("example.com", "attractwell", intent, email_state, dns_snapshot)
+        plan = builder.build_plan(decision, dns_snapshot, email_state)
+        
+        # Should be marked as completed
+        self.assertTrue(plan['is_completed'], "Domain should be marked as completed")
+        self.assertEqual(len(plan['recommended_actions']), 0, "Should have no recommended actions")
+
+    def test_action_plan_subdomain_missing_cname(self):
+        """Test action plan for subdomain without required CNAME"""
+        from action_plan_builder import ActionPlanBuilder
+        
+        builder = ActionPlanBuilder(self.config)
+        engine = DecisionEngine(self.config)
+        
+        # Setup: Subdomain with no CNAME
+        dns_snapshot = {
+            'NS': [{'host': '@', 'value': 'ns1.registrar.com', 'ttl': 3600}],
+            'CNAME': [],
+            'MX': [],
+            'TXT': []
+        }
+        
+        intent = {}
+        email_state = {"has_mx": False}
+        
+        decision = engine.evaluate("shop.example.com", "getoiling", intent, email_state, dns_snapshot)
+        plan = builder.build_plan(decision, dns_snapshot, email_state)
+        
+        # Should have action to add CNAME
+        self.assertFalse(plan['is_completed'])
+        self.assertTrue(len(plan['recommended_actions']) > 0, "Should have recommended actions")
+        
+        # Find the CNAME action
+        cname_action = next((a for a in plan['recommended_actions'] if a['type'] == 'CNAME'), None)
+        self.assertIsNotNone(cname_action, "Should recommend adding CNAME")
+        self.assertEqual(cname_action['host'], 'shop')
+        self.assertEqual(cname_action['value'], 'sites.getoiling.com')
+
+
 if __name__ == '__main__':
     unittest.main()
