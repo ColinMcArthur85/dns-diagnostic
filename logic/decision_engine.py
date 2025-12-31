@@ -182,8 +182,10 @@ class DecisionEngine:
                 
                 # Check if record matches target
                 if current_records:
-                    matched = any(r.get('value', '').rstrip('.').lower() == target_val for r in current_records)
-                    if not matched:
+                    matched_records = [r for r in current_records if r.get('value', '').rstrip('.').lower() == target_val]
+                    incorrect_records = [r for r in current_records if r.get('value', '').rstrip('.').lower() != target_val]
+                    
+                    if not matched_records:
                         conflicts.append({
                             "type": "record_mismatch",
                             "severity": "info",
@@ -192,6 +194,16 @@ class DecisionEngine:
                             "current": current_records[0].get('value', ''),
                             "required": target_val
                         })
+                    elif incorrect_records:
+                        # We have the correct record, but also some incorrect ones
+                        for r in incorrect_records:
+                            conflicts.append({
+                                "type": "extra_record",
+                                "severity": "warning",
+                                "message": f"Extra {rec_type} record found for {host} ({r.get('value')}). This may cause intermittent connection issues.",
+                                "blocking": True, # Extra records should be removed
+                                "conflicting_record": r
+                            })
         
         # Subdomain-specific validation
         if is_sub:

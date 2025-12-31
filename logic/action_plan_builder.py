@@ -41,17 +41,22 @@ class ActionPlanBuilder:
         target_ns = [ns.rstrip('.').lower() for ns in platform_rules.get('nameservers', [])]
         
         ns_status = "missing"
+        effective_target = ", ".join(target_ns)
+        
         if option_key == 'option_1':
             ns_status = "matched" if all(ns in all_current_ns for ns in target_ns) else "different"
         elif all(ns in all_current_ns for ns in target_ns):
             ns_status = "matched"
         else:
             ns_status = "external"
+            # When external (record-level), the target isn't changing the nameservers
+            # It's preserving them.
+            effective_target = "Preserve existing (Managed at Registrar)"
 
         comparison.append({
             "label": "Nameservers",
             "current": ", ".join(all_current_ns) if all_current_ns else "None detected",
-            "target": ", ".join(target_ns),
+            "target": effective_target,
             "status": ns_status,
             "is_required": False,
             "is_recommended": (option_key == 'option_1')
