@@ -25,7 +25,7 @@ class handler(BaseHTTPRequestHandler):
             audience = data.get('audience', 'customer')
             action = data.get('action', 'chat')
 
-            agent = ConversationalAgent(model="gpt-5-mini")
+            agent = ConversationalAgent(model="gpt-4o-mini")
             
             if action == 'start' or not session_id:
                 result = agent.start_conversation(diagnostic_data, audience=audience)

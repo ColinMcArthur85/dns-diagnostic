@@ -12,7 +12,7 @@ class AITranslator:
     It follows strict guardrails to prevent hallucination and only translates existing data.
     """
     
-    def __init__(self, model="gpt-5-mini"):
+    def __init__(self, model="gpt-4o-mini"):
         self.api_key = os.getenv("OPENAI_API_KEY")
         if not self.api_key:
             raise ValueError("OPENAI_API_KEY not found in environment variables.")
@@ -141,7 +141,9 @@ Remember: Only translate what's in the data. Do not invent records or suggest ac
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_content}
                 ],
-                response_format={"type": "json_object"}
+                response_format={"type": "json_object"},
+                temperature=0.3,
+                max_tokens=1000
             )
             
             ai_result = json.loads(response.choices[0].message.content)

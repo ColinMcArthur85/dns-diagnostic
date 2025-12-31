@@ -14,7 +14,7 @@ class ConversationalAgent:
     grounded in the original diagnostic data.
     """
     
-    def __init__(self, model="gpt-5-mini"):
+    def __init__(self, model="gpt-4o-mini"):
         self.api_key = os.getenv("OPENAI_API_KEY")
         if not self.api_key:
             raise ValueError("OPENAI_API_KEY not found in environment variables.")
@@ -102,7 +102,8 @@ Avoid jargon. If you must use technical terms, explain them simply.
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
-                max_completion_tokens=500  # Limit response length
+                temperature=0.4,
+                max_tokens=500
             )
             
             ai_message = response.choices[0].message.content
