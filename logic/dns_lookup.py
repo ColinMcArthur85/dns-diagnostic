@@ -321,8 +321,7 @@ class DNSLookup:
         for t in all_types:
             if t in requested_types:
                 records = self.get_records(domain, t)
-                if records:
-                    results[t] = records
+                results[t] = records
 
         # www lookup (if applicable and web-related)
         if check_www and not domain.startswith('www.'):
@@ -332,17 +331,14 @@ class DNSLookup:
                 www_records = self.get_records(www_domain, 'CNAME')
                 www_a_records = self.get_records(www_domain, 'A')
                 
-                if www_records:
-                    results['WWW_CNAME'] = www_records
-                if www_a_records:
-                    results['WWW_A'] = www_a_records
+                results['WWW_CNAME'] = www_records
+                results['WWW_A'] = www_a_records
 
         # DMARC lookup
         if 'DMARC' in requested_types:
             dmarc_domain = f"_dmarc.{domain}"
             dmarc_records = self.get_records(dmarc_domain, 'TXT')
-            if dmarc_records:
-                results['DMARC'] = dmarc_records
+            results['DMARC'] = dmarc_records
 
         # DKIM lookup
         if 'DKIM' in requested_types:
@@ -356,7 +352,6 @@ class DNSLookup:
                 if dkim_cname and not dkim_cname[0].get('error'):
                     dkim_records.extend(dkim_cname)
             
-            if dkim_records:
-                results['DKIM'] = dkim_records
+            results['DKIM'] = dkim_records
 
         return results

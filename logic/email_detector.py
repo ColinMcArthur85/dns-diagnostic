@@ -4,7 +4,7 @@ class EmailDetector:
 
     def detect_provider(self, mx_records):
         if not mx_records:
-            return {'has_mx': False, 'provider': None}
+            return {'has_mx': False, 'provider': None, 'display_name': 'None Detected'}
 
         mx_values = [r['value'].lower() for r in mx_records]
         

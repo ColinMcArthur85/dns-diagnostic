@@ -124,7 +124,7 @@ class ActionPlanBuilder:
             mx_recs = dns_snapshot.get('MX', [])
             comparison.append({
                 "label": "MX Records",
-                "current": ", ".join([f"{r.get('value')} (prio {r.get('priority', '?')})" for r in mx_recs]) if mx_recs else "None",
+                "current": ", ".join([f"{r.get('value')} (prio {r.get('priority', '?')})" for r in mx_recs]) if mx_recs else "None detected",
                 "target": "Preserve existing",
                 "status": "matched" if mx_recs else "info",
                 "is_required": False
