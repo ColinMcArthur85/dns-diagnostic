@@ -71,15 +71,19 @@ class handler(BaseHTTPRequestHandler):
             final_plan = builder.build_plan(decision, snapshot, email_state)
 
             # 6. AI Translation
-            try:
-                translator = AITranslator()
-                if ai_audience == 'both':
-                    ai_insights = translator.translate_both(final_plan)
-                else:
-                    ai_insights = translator.translate_diagnostic(final_plan, audience=ai_audience)
-                final_plan["ai_insights"] = ai_insights
-            except Exception as ai_error:
-                final_plan["ai_insights"] = {"error": str(ai_error)}
+            use_ai = data.get('use_ai', True)
+            if use_ai:
+                try:
+                    translator = AITranslator()
+                    if ai_audience == 'both':
+                        ai_insights = translator.translate_both(final_plan)
+                    else:
+                        ai_insights = translator.translate_diagnostic(final_plan, audience=ai_audience)
+                    final_plan["ai_insights"] = ai_insights
+                except Exception as ai_error:
+                    final_plan["ai_insights"] = {"error": str(ai_error)}
+            else:
+                final_plan["ai_insights"] = None
 
             self._send_json(final_plan, 200)
 

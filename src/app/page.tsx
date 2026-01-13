@@ -16,6 +16,8 @@ export default function Home() {
   const [aiAudience, setAiAudience] = useState<'customer' | 'support' | 'both'>('customer');
   const [activeAiTab, setActiveAiTab] = useState<'customer' | 'support'>('customer');
   const [showChat, setShowChat] = useState(false);  // Phase 3: Chat interface
+  const [useAi, setUseAi] = useState(true);        // New: Toggle for AI assistant
+  const [toast, setToast] = useState<{ message: string; visible: boolean }>({ message: '', visible: false });
   
   // Intent questions
   const [intent, setIntent] = useState({
@@ -40,6 +42,13 @@ export default function Home() {
     { id: 'NS', label: 'NS' },
   ];
 
+  // Copy to clipboard with toast notification
+  const copyToClipboard = (text: string, label: string) => {
+    navigator.clipboard.writeText(text);
+    setToast({ message: `${label} copied to clipboard!`, visible: true });
+    setTimeout(() => setToast({ message: '', visible: false }), 2500);
+  };
+
   const toggleSection = (id: string) => {
     if (id === 'all') {
       setSelectedSections(['all']);
@@ -58,6 +67,19 @@ export default function Home() {
 
   const handleDiagnose = async () => {
     if (!domain) return;
+    
+    // Sanitize domain: trim, remove protocol, remove trailing path/query/hash
+    const cleanDomain = domain.trim()
+      .replace(/^https?:\/\//i, '')
+      .split('/')[0]
+      .split('?')[0]
+      .split('#')[0]
+      .toLowerCase();
+
+    if (!cleanDomain) return;
+    
+    // Update domain state so the user sees the sanitized version
+    setDomain(cleanDomain);
     setLoading(true);
     setError(null);
     setResult(null);
@@ -67,13 +89,28 @@ export default function Home() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          domain, 
+          domain: cleanDomain, 
           platform, 
           sections: selectedSections,
           intent,
-          ai_audience: aiAudience  // Phase 2: Send audience parameter
+          ai_audience: aiAudience,  // Phase 2: Send audience parameter
+          use_ai: useAi            // New: Send AI toggle state
         }),
       });
+
+      if (!res.ok) {
+        if (res.status === 404) {
+          throw new Error('Endpoint /api/diagnose not found. Ensure the backend is running (use vercel dev).');
+        }
+        const text = await res.text();
+        try {
+          const errorJson = JSON.parse(text);
+          throw new Error(errorJson.error || `Server error: ${res.status}`);
+        } catch {
+          throw new Error(`Server returned status ${res.status}. Please check your connection.`);
+        }
+      }
+
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       setResult(data);
@@ -119,6 +156,20 @@ export default function Home() {
                 placeholder="Enter domain (e.g. example.com)"
                 value={domain}
                 onChange={(e) => setDomain(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleDiagnose();
+                }}
+                onBlur={() => {
+                  if (domain.includes('http') || domain.includes('/') || domain.includes(' ')) {
+                    const sanitized = domain.trim()
+                      .replace(/^https?:\/\//i, '')
+                      .split('/')[0]
+                      .split('?')[0]
+                      .split('#')[0]
+                      .toLowerCase();
+                    setDomain(sanitized);
+                  }
+                }}
                 className="input-field"
               />
             </div>
@@ -280,30 +331,55 @@ export default function Home() {
                       </div>
                     </label>
 
-                    {/* Phase 2: AI Audience Selector */}
-                    <div className="pt-4 border-t border-[#262626]">
-                      <label className="block">
-                        <div className="flex items-center gap-2 mb-3">
-                          <Terminal size={14} className="text-purple-400" />
-                          <span className="text-sm font-bold text-gray-300">AI Explanation Mode</span>
-                          <span className="bg-purple-500/10 text-purple-400 text-[8px] font-bold px-1.5 py-0.5 rounded uppercase">
-                            New
-                          </span>
+                    {/* Toggle for AI Assistant */}
+                    <div className="pt-2">
+                       <label className="flex items-center gap-3 cursor-pointer group">
+                        <div className="relative inline-flex items-center cursor-pointer">
+                          <input
+                            type="checkbox"
+                            className="sr-only peer"
+                            checked={useAi}
+                            onChange={(e) => setUseAi(e.target.checked)}
+                          />
+                          <div className="w-9 h-5 bg-gray-700 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-500/50 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
                         </div>
-                        <select
-                          value={aiAudience}
-                          onChange={(e) => setAiAudience(e.target.value as 'customer' | 'support' | 'both')}
-                          className="w-full px-3 py-2 bg-[#0d0d0d] border border-gray-600 rounded-lg text-gray-300 text-sm focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500"
-                        >
-                          <option value="customer">Customer-Friendly (Plain English)</option>
-                          <option value="support">Support Staff (Technical Details)</option>
-                          <option value="both">Both Views (Toggle Between Them)</option>
-                        </select>
-                        <div className="text-xs text-gray-500 mt-2">
-                          Controls how AI explains the results. Customer view uses simple language, Support view includes technical details.
+                        <div className="flex-1">
+                          <div className="text-sm text-gray-300 group-hover:text-white transition-colors">
+                            Enable AI Assistant
+                          </div>
+                          <div className="text-xs text-gray-500 mt-0.5">
+                            Use AI to analyze results and provide guidance (turn off for direct comparison only)
+                          </div>
                         </div>
                       </label>
                     </div>
+
+                    {/* Phase 2: AI Audience Selector */}
+                    {useAi && (
+                      <div className="pt-4 border-t border-[#262626]">
+                        <label className="block">
+                          <div className="flex items-center gap-2 mb-3">
+                            <Terminal size={14} className="text-purple-400" />
+                            <span className="text-sm font-bold text-gray-300">AI Explanation Mode</span>
+                            <span className="bg-purple-500/10 text-purple-400 text-[8px] font-bold px-1.5 py-0.5 rounded uppercase">
+                              New
+                            </span>
+                          </div>
+                          <select
+                            value={aiAudience}
+                            onChange={(e) => setAiAudience(e.target.value as 'customer' | 'support' | 'both')}
+                            className="w-full px-3 py-2 bg-[#0d0d0d] border border-gray-600 rounded-lg text-gray-300 text-sm focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500"
+                          >
+                            <option value="customer">Customer-Friendly (Plain English)</option>
+                            <option value="support">Support Staff (Technical Details)</option>
+                            <option value="both">Both Views (Toggle Between Them)</option>
+                          </select>
+                          <div className="text-xs text-gray-500 mt-2">
+                            Controls how AI explains the results. Customer view uses simple language, Support view includes technical details.
+                          </div>
+                        </label>
+                      </div>
+                    )}
                   </div>
                 </div>
               </motion.div>
@@ -448,7 +524,7 @@ export default function Home() {
             )}
 
             {/* Phase 2: AI Analysis Section with Support/Customer Toggle */}
-            {(result.ai_insights?.summary || result.ai_insights?.support || result.ai_insights?.customer) && (
+            {useAi && (result.ai_insights?.summary || result.ai_insights?.support || result.ai_insights?.customer) && (
               <div className="card overflow-hidden">
                 <div className="card-header">
                   <div className="flex items-center gap-3">
@@ -554,8 +630,17 @@ export default function Home() {
                       </div>
                       
                       {result.ai_insights.support.technical_summary && (
-                        <div className="p-4 bg-purple-950/20 border border-purple-500/20 rounded-lg">
-                          <div className="text-purple-400 font-mono text-sm leading-relaxed">{result.ai_insights.support.technical_summary}</div>
+                        <div className="relative group">
+                          <div className="p-4 bg-purple-950/20 border border-purple-500/20 rounded-lg">
+                            <div className="text-purple-400 font-mono text-sm leading-relaxed">{result.ai_insights.support.technical_summary}</div>
+                          </div>
+                          <button
+                            onClick={() => copyToClipboard(result.ai_insights.support.technical_summary, 'Technical summary')}
+                            className="absolute top-2 right-2 p-1.5 bg-purple-600/20 hover:bg-purple-600/40 border border-purple-500/30 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                            title="Copy technical summary"
+                          >
+                            <Copy size={14} className="text-purple-400" />
+                          </button>
                         </div>
                       )}
                       
@@ -602,6 +687,29 @@ export default function Home() {
                           </div>
                         </div>
                       )}
+
+                      {/* Client Email Draft */}
+                      {result.ai_insights.support.client_email_draft && (
+                        <div className="space-y-2">
+                          <div className="text-xs uppercase tracking-wider text-gray-500 font-bold flex items-center gap-2">
+                            <Mail size={12} />
+                            Client Email Draft
+                          </div>
+                          <div className="relative group">
+                            <div className="p-4 bg-green-950/20 border border-green-500/20 rounded-lg">
+                              <pre className="text-gray-300 text-sm leading-relaxed whitespace-pre-wrap font-sans">{result.ai_insights.support.client_email_draft}</pre>
+                            </div>
+                            <button
+                              onClick={() => copyToClipboard(result.ai_insights.support.client_email_draft, 'Email draft')}
+                              className="absolute top-2 right-2 px-3 py-1.5 bg-green-600/20 hover:bg-green-600/40 border border-green-500/30 rounded-lg transition-all flex items-center gap-2 opacity-0 group-hover:opacity-100"
+                              title="Copy email draft"
+                            >
+                              <Copy size={14} className="text-green-400" />
+                              <span className="text-xs text-green-400 font-semibold">Copy Email</span>
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                   
@@ -638,7 +746,7 @@ export default function Home() {
       </AnimatePresence>
 
       {/* Phase 3: Floating Chat Button */}
-      {result && !showChat && (
+      {result && !showChat && useAi && (
         <motion.button
           initial={{ scale: 0, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
@@ -665,6 +773,20 @@ export default function Home() {
           onClose={() => setShowChat(false)}
         />
       )}
+      {/* Toast Notification */}
+      <AnimatePresence>
+        {toast.visible && (
+          <motion.div
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 50 }}
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-3 bg-green-600/90 text-white rounded-lg shadow-2xl flex items-center gap-2 backdrop-blur-sm"
+          >
+            <Check size={16} />
+            <span className="text-sm font-semibold">{toast.message}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </main>
   );
 }

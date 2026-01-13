@@ -48,3 +48,24 @@ class ConfigLoader:
 
     def get_warning(self, warning_key):
         return self.rules['warnings'].get(warning_key)
+    
+    def get_global_conflicts(self):
+        """Returns the global conflict rules for DNS record types.
+        
+        Returns:
+            dict: Mapping of record types to lists of conflicting types
+                  e.g., {'A': ['CNAME'], 'CNAME': ['A', 'AAAA', 'TXT', 'MX']}
+        """
+        return self.rules.get('global_conflicts', {})
+    
+    def is_ipv6_supported(self, platform: str) -> bool:
+        """Check if a platform supports IPv6 (AAAA) records.
+        
+        Args:
+            platform: Platform identifier (e.g., 'attractwell', 'getoiling')
+            
+        Returns:
+            bool: True if platform supports IPv6, False if AAAA must be removed
+        """
+        unsupported = self.rules.get('ipv6_unsupported_platforms', [])
+        return platform.lower() not in [p.lower() for p in unsupported]

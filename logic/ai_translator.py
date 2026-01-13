@@ -26,8 +26,19 @@ class AITranslator:
 **CRITICAL GUARDRAILS - YOU MUST FOLLOW THESE STRICTLY**:
 1. **NEVER invent or suggest DNS records** that are not explicitly mentioned in the provided diagnostic data
 2. **ONLY translate existing data** - you are a translator, not a decision-maker
-3. If you don't know something or it's not in the data, say "I don't have that information" or "Please contact support for details"
-4. **DO NOT recommend specific DNS values** unless they are already in the `recommended_actions` array
+3. **HOW TO ANSWER "What is my X record?" QUESTIONS**:
+   - LOOK IN `dns_snapshot` for the actual records:
+     • `dns_snapshot.A` = A records (IPv4 addresses)
+     • `dns_snapshot.AAAA` = AAAA records (IPv6 addresses)
+     • `dns_snapshot.CNAME` = CNAME records (aliases)
+     • `dns_snapshot.MX` = Email server records
+     • `dns_snapshot.TXT` = Text records (look for "v=spf1" for SPF)
+     • `dns_snapshot.DMARC` = DMARC policy (look for "v=DMARC1")
+     • `dns_snapshot.DKIM` = DKIM signing records
+     • `dns_snapshot.NS` = Nameserver records
+   - If the record exists in dns_snapshot, **QUOTE THE ACTUAL VALUE**
+   - Do NOT say "I don't know" if the data is in dns_snapshot
+4. **DO NOT recommend specific DNS values** unless they are already in `recommended_actions`
 5. **DO NOT diagnose issues** beyond what's in the `conflicts` and `warnings` arrays
 6. Stick to facts from the JSON only
 """
@@ -40,7 +51,7 @@ You are a technical DNS analysis assistant for SUPPORT STAFF.
 
 **Your Audience**: Internal support team members who understand DNS basics but need clear technical summaries.
 
-**Your Task**: Translate the diagnostic JSON into a concise technical summary.
+**Your Task**: Translate the diagnostic JSON into a concise technical summary AND generate a client-ready email draft.
 IMPORTANT CONTEXT: 
 - If `connection_option` is `option_2`, we are using record-level changes. Explain that this is likely to preserve existing email or other services.
 - Highlight if the A/CNAME records match despite nameservers being 'External'.
@@ -51,13 +62,22 @@ IMPORTANT CONTEXT:
 - Required actions (from `recommended_actions` array only)
 - Delegate access status and why it's recommended/not recommended
 
-**Tone**: Professional, technical but clear. Use DNS terminology appropriately.
+**Client Email Draft Requirements**:
+Write a polite, professional email that support can send to the customer. Structure:
+- Greeting: "Hi [Name],"
+- Status: Brief summary of what you found (good news first if domain is complete)
+- Actions (if any): Bulleted list of exactly what needs to be done, in plain English
+- Closing: "Let me know when this is complete" or "You're all set!" depending on status
+- Keep it simple - avoid DNS jargon like "A record" or "CNAME", use "your domain settings" instead
+
+**Tone**: Professional, technical but clear for the summary. Friendly and simple for the email.
 
 **Output Format**: JSON with these exact keys:
 - "technical_summary": Brief technical overview (2-3 sentences)
 - "issues": Array of specific issues found (from conflicts/warnings only, or empty array)
 - "actions_required": Array of actions (from recommended_actions only, or empty array)
-- "notes": Array of important context for support staff (e.g., platform-managed domain detected, email override occurred)
+- "notes": Array of important context for support staff
+- "client_email_draft": Ready-to-send email for the customer (use [Name] as placeholder)
 
 ONLY output valid JSON. No other text.
 """
@@ -105,7 +125,7 @@ ONLY output valid JSON. No other text.
         """
         system_prompt = self._get_system_prompt(audience)
         
-        # Create a cleaned version of the JSON to send (remove sensitive internal data)
+        # Create a cleaned version of the JSON to send (with full DNS context for answering questions)
         clean_data = {
             "domain": diagnostic_json.get("domain"),
             "platform": diagnostic_json.get("platform"),
@@ -117,15 +137,12 @@ ONLY output valid JSON. No other text.
             "conflicts": diagnostic_json.get("conflicts", []),
             "recommended_actions": diagnostic_json.get("recommended_actions", []),
             "potential_issues": diagnostic_json.get("potential_issues", []),
-            "email_state": {
-                "has_mx": diagnostic_json.get("email_state", {}).get("has_mx", False),
-                "provider": diagnostic_json.get("email_state", {}).get("provider"),
-                "display_name": diagnostic_json.get("email_state", {}).get("display_name"),
-                "has_spf": diagnostic_json.get("email_state", {}).get("has_spf", False),
-                "has_dmarc": diagnostic_json.get("email_state", {}).get("has_dmarc", False),
-            },
+            # Full email_state for complete context
+            "email_state": diagnostic_json.get("email_state", {}),
             "delegate_access": diagnostic_json.get("delegate_access", {}),
-            "comparison": diagnostic_json.get("comparison", [])
+            "comparison": diagnostic_json.get("comparison", []),
+            # Include dns_snapshot so AI can answer "What is my X record?" questions
+            "dns_snapshot": diagnostic_json.get("dns_snapshot", {})
         }
         
         user_content = f"""Analyze this DNS diagnostic data and provide {audience}-facing explanation:

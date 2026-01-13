@@ -62,6 +62,42 @@ class ActionPlanBuilder:
             "is_recommended": (option_key == 'option_1')
         })
 
+        # 1b. Check for Rogue AAAA (IPv6) records
+        # Platforms like AW/GO are IPv4 only - AAAA records can block SSL generation
+        current_aaaa = [r for r in dns_snapshot.get('AAAA', []) if not r.get('error')]
+        www_aaaa = [r for r in dns_snapshot.get('WWW_AAAA', []) if not r.get('error')]
+        all_aaaa = current_aaaa + www_aaaa
+        
+        if all_aaaa:
+            aaaa_values = ", ".join([r.get('value', 'unknown') for r in all_aaaa])
+            
+            # Add to visual comparison
+            comparison.append({
+                "label": "AAAA (IPv6) Records",
+                "current": aaaa_values,
+                "target": "None (Delete these)",
+                "status": "conflict",
+                "is_required": True,
+                "notes": "IPv6 records often block SSL generation on this platform and must be removed."
+            })
+            
+            # Inject into main conflicts list
+            ipv6_conflict = {
+                "type": "extra_record",
+                "severity": "high",
+                "message": "IPv6 (AAAA) records detected. These often block SSL generation and must be deleted.",
+                "blocking": True,
+                "conflicting_records": all_aaaa
+            }
+            
+            # Avoid duplicates
+            existing_aaaa_conflict = any(
+                c.get('type') == 'extra_record' and 'AAAA' in c.get('message', '') 
+                for c in decision.get('conflicts', [])
+            )
+            if not existing_aaaa_conflict:
+                decision.setdefault('conflicts', []).append(ipv6_conflict)
+
         # 2. Main Connection Records
         if is_sub:
             sub_config = platform_rules.get('subdomain', {})
@@ -175,7 +211,7 @@ class ActionPlanBuilder:
         
         # Map sections to record types (matching dns_lookup.py)
         mapping = {
-            'web': ['A', 'CNAME', 'NS'],
+            'web': ['A', 'AAAA', 'CNAME', 'NS'],  # AAAA for IPv6 detection
             'email': ['MX', 'TXT', 'DMARC', 'DKIM'],
             'SPF': ['TXT']
         }
@@ -282,6 +318,28 @@ class ActionPlanBuilder:
                             actions.append(action)
                         else:
                             suggestions.append(action)
+
+        # Add delete actions for AAAA (IPv6) records that must be removed
+        current_aaaa = [r for r in dns_snapshot.get('AAAA', []) if not r.get('error')]
+        www_aaaa = [r for r in dns_snapshot.get('WWW_AAAA', []) if not r.get('error')]
+        
+        for aaaa_record in current_aaaa:
+            actions.append({
+                "action": "delete_record",
+                "type": "AAAA",
+                "host": "@",
+                "value": aaaa_record.get('value'),
+                "reason": "IPv6 records block SSL generation on this platform"
+            })
+        
+        for aaaa_record in www_aaaa:
+            actions.append({
+                "action": "delete_record",
+                "type": "AAAA",
+                "host": "www",
+                "value": aaaa_record.get('value'),
+                "reason": "IPv6 records block SSL generation on this platform"
+            })
 
         plan['recommended_actions'] = actions
         plan['potential_issues'] = suggestions

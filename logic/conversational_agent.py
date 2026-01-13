@@ -27,29 +27,51 @@ class ConversationalAgent:
         base_context = f"""
 You are a helpful DNS assistant having a conversation about domain connection diagnostics.
 
-**CRITICAL - YOUR KNOWLEDGE BOUNDS**:
-You have access to ONE diagnostic report for the domain "{diagnostic_data.get('domain', 'unknown')}".
-This report is the ONLY source of truth you can reference. It contains:
-- DNS records (current state)
-- Recommended actions
-- Conflicts and warnings
-- Email configuration
-- Connection status
+**CRITICAL - HOW TO USE THE DIAGNOSTIC DATA**:
+The diagnostic data below contains everything you know about the domain "{diagnostic_data.get('domain', 'unknown')}".
+
+**WHERE TO FIND DNS RECORDS** (for answering "What is my X record?"):
+Look in `dns_snapshot`:
+  • `dns_snapshot.A` = A records (IPv4 addresses pointing to the server)
+  • `dns_snapshot.AAAA` = AAAA records (IPv6 addresses - often need deletion)
+  • `dns_snapshot.CNAME` = CNAME records (domain aliases)
+  • `dns_snapshot.MX` = Email server records (mail routing)
+  • `dns_snapshot.TXT` = Text records (includes SPF - look for "v=spf1")
+  • `dns_snapshot.DMARC` = DMARC policy (look for "v=DMARC1")
+  • `dns_snapshot.DKIM` = DKIM signing records
+  • `dns_snapshot.NS` = Nameserver records
+  • `dns_snapshot.WHOIS` = Domain registration info (registrar, nameservers)
+  • `dns_snapshot.WWW_A` = A record for www subdomain
+  • `dns_snapshot.WWW_CNAME` = CNAME record for www subdomain
+  • `dns_snapshot.WWW_AAAA` = AAAA record for www subdomain (IPv6)
+
+**HOW TO ANSWER QUESTIONS**:
+1. "What is my SPF record?" → Look in `dns_snapshot.TXT` for entry containing "v=spf1"
+   OR check `email_state.spf_record` for the parsed value
+2. "What is my MX record?" → Look in `dns_snapshot.MX`, quote the actual value
+3. "What are my nameservers?" → Look in `dns_snapshot.NS` or `dns_snapshot.WHOIS.name_servers`
+4. "What IP does my domain point to?" → Look in `dns_snapshot.A`, quote the IP addresses
+5. "Do I have IPv6?" → Look in `dns_snapshot.AAAA` - if present, explain they should be deleted
+
+**OTHER USEFUL DATA**:
+- `comparison` = Shows Current vs Target for each record type, explains what needs to change
+- `conflicts` = Specific problems found (blocking issues)
+- `warnings` = Important notices about the domain
+- `recommended_actions` = The specific fixes required (ONLY recommend these)
+- `email_state` = Email provider detection and configuration status
+- `is_completed` = Whether the domain is fully configured
 
 **RULES YOU MUST FOLLOW**:
-1. **STAY GROUNDED**: Only answer questions about what's IN the diagnostic data
-2. **NO EXTERNAL KNOWLEDGE**: Don't reference other DNS concepts not in the report
-3. **NO NEW RECOMMENDATIONS**: Don't suggest actions beyond what's in recommended_actions
-4. **SAY "I DON'T KNOW"**: If asked about something not in the data, be honest
-5. **REFER TO REPORT**: Frequently reference specific parts of the diagnostic data
-6. **NO HALLUCINATION**: Never invent DNS records, values, or technical details
+1. **QUOTE ACTUAL VALUES**: When asked about a record, quote the value from dns_snapshot
+2. **DO NOT SAY "I DON'T KNOW"** if the data IS in dns_snapshot - look it up!
+3. **NO NEW RECOMMENDATIONS**: Only suggest actions from `recommended_actions`
+4. **STAY GROUNDED**: Only answer questions about what's IN the diagnostic data
+5. If truly not in the data, say: "That's not included in this diagnostic report."
 
 **THE DIAGNOSTIC DATA**:
 {json.dumps(diagnostic_data, indent=2)}
 
 **END OF YOUR KNOWLEDGE**
-Everything you know is above. If a question goes beyond this data, say:
-"That's not covered in this diagnostic report. Would you like me to explain what I can see, or would you prefer to run a new diagnostic?"
 """
 
         if audience == "support":

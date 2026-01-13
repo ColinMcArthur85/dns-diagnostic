@@ -256,9 +256,25 @@ class DNSLookup:
         
         try:
             w = whois.whois(domain)
+            
+            # Normalize registrar (some libraries return a list)
+            registrar = w.registrar
+            if isinstance(registrar, list):
+                registrar = registrar[0] if registrar else None
+            
+            # Normalize name_servers (ensure it's always a list of strings)
+            ns = w.name_servers
+            if ns is None:
+                ns = []
+            elif isinstance(ns, str):
+                ns = [ns]
+            elif isinstance(ns, list):
+                # Ensure all elements are strings and cleaned
+                ns = [str(item) for item in ns if item]
+            
             return {
-                'registrar': w.registrar,
-                'name_servers': w.name_servers if w.name_servers else []
+                'registrar': registrar,
+                'name_servers': ns
             }
         except Exception as e:
             # Sanitized error message (P1-8)
@@ -268,6 +284,201 @@ class DNSLookup:
                 'registrar': None,
                 'name_servers': []
             }
+
+    # === AUTHORITATIVE LOOKUP METHODS (Phase 3: Trace Functionality) ===
+    
+    def get_authoritative_nameservers(self, domain: str) -> List[str]:
+        """
+        Find the authoritative nameservers for the domain.
+        
+        This queries the NS records to find which nameservers are authoritative
+        for this domain. Used for direct lookups that bypass cache.
+        
+        Args:
+            domain: Domain to find authoritative NS for
+            
+        Returns:
+            List of authoritative nameserver hostnames, or empty list on error
+        """
+        if not self._is_valid_domain(domain):
+            logger.warning(f"Invalid domain for auth NS lookup: {domain}")
+            return []
+        if self._is_blocked_domain(domain):
+            logger.warning(f"Blocked domain for auth NS lookup: {domain}")
+            return []
+            
+        try:
+            answers = self.resolver.resolve(domain, 'NS')
+            return [str(r.target).rstrip('.') for r in answers]
+        except dns.resolver.NXDOMAIN:
+            logger.warning(f"Domain does not exist: {domain}")
+            return []
+        except dns.resolver.NoAnswer:
+            logger.warning(f"No NS records found for: {domain}")
+            return []
+        except Exception as e:
+            logger.warning(f"Could not find authoritative NS for {domain}: {self._sanitize_error(e)}")
+            return []
+
+    def bypass_cache_lookup(self, domain: str, record_type: str) -> List[Dict[str, Any]]:
+        """
+        Query the authoritative nameservers directly, bypassing public resolver cache.
+        
+        This is useful for 'I just fixed it!' scenarios where users want to verify 
+        their DNS changes before full propagation completes.
+        
+        Security Controls:
+        - Domain validation and SSRF blocking
+        - Timeout enforcement
+        - Error sanitization
+        
+        Args:
+            domain: Domain to query
+            record_type: DNS record type (A, CNAME, MX, etc.)
+            
+        Returns:
+            List of records from authoritative source, with 'source': 'authoritative'
+        """
+        # Security validation
+        if not self._is_valid_domain(domain):
+            return [{"error": "Invalid domain format", "type": record_type, "source": "authoritative"}]
+        if self._is_blocked_domain(domain):
+            return [{"error": "Domain not allowed", "type": record_type, "source": "authoritative"}]
+        
+        auth_ns_list = self.get_authoritative_nameservers(domain)
+        if not auth_ns_list:
+            return [{"error": "Could not find authoritative nameservers", "type": record_type, "source": "authoritative"}]
+
+        # Create a temporary resolver pointing to the auth NS
+        custom_resolver = dns.resolver.Resolver()
+        custom_resolver.timeout = self.DEFAULT_TIMEOUT
+        custom_resolver.lifetime = self.DEFAULT_LIFETIME
+        
+        # Try each authoritative nameserver until one works
+        last_error = None
+        for auth_ns in auth_ns_list[:3]:  # Try up to 3 nameservers
+            try:
+                # Resolve the IP of the auth NS (we need an IP, not a hostname)
+                ns_ip_answers = self.resolver.resolve(auth_ns, 'A')
+                ns_ip = str(ns_ip_answers[0])
+                custom_resolver.nameservers = [ns_ip]
+                
+                # Now query using this resolver
+                answers = custom_resolver.resolve(domain, record_type)
+                results = []
+                
+                for rdata in answers:
+                    value = rdata.to_text()
+                    
+                    # Handle TXT record formatting
+                    if record_type == 'TXT':
+                        if hasattr(rdata, 'strings'):
+                            value = "".join([
+                                s.decode('utf-8') if isinstance(s, bytes) else s 
+                                for s in rdata.strings
+                            ])
+                        else:
+                            value = value.strip('"')
+                    
+                    record_data = {
+                        'type': record_type,
+                        'host': domain,
+                        'value': value,
+                        'ttl': answers.ttl,
+                        'source': 'authoritative',
+                        'nameserver': auth_ns
+                    }
+                    
+                    # Handle MX priority
+                    if record_type == 'MX':
+                        record_data['priority'] = getattr(rdata, 'preference', 0)
+                        record_data['value'] = str(rdata.exchange).rstrip('.')
+                    
+                    results.append(record_data)
+                
+                return results
+                
+            except dns.resolver.NXDOMAIN:
+                return [{"error": "Domain does not exist", "type": record_type, "source": "authoritative"}]
+            except dns.resolver.NoAnswer:
+                return []  # Record type doesn't exist (not an error)
+            except Exception as e:
+                last_error = e
+                logger.debug(f"Auth lookup via {auth_ns} failed, trying next: {e}")
+                continue
+        
+        # All nameservers failed
+        error_msg = self._sanitize_error(last_error) if last_error else "All nameservers failed"
+        logger.warning(f"Authoritative lookup failed for {domain}/{record_type}: {error_msg}")
+        return [{"error": f"Direct lookup failed: {error_msg}", "type": record_type, "source": "authoritative"}]
+
+    def trace_record(self, domain: str, record_type: str) -> Dict[str, Any]:
+        """
+        Compare cached (public resolver) vs authoritative (direct) DNS records.
+        
+        This is the main method for diagnosing propagation issues. It shows:
+        - What public resolvers (Cloudflare, Google) currently see
+        - What the authoritative nameservers actually have
+        - Whether the change has fully propagated
+        - Estimated time remaining until propagation completes
+        
+        Args:
+            domain: Domain to trace
+            record_type: DNS record type to compare
+            
+        Returns:
+            {
+                "domain": str,
+                "record_type": str,
+                "cached": [...],        # What public resolvers see
+                "authoritative": [...], # What the actual DNS servers have
+                "propagated": bool,     # Whether they match
+                "ttl_remaining": int,   # Seconds until cache expires (estimate)
+                "message": str          # Human-readable status
+            }
+        """
+        # Get both cached and authoritative records
+        cached = self.get_records(domain, record_type)
+        authoritative = self.bypass_cache_lookup(domain, record_type)
+        
+        # Filter out error records for comparison
+        cached_clean = [r for r in cached if not r.get('error')]
+        auth_clean = [r for r in authoritative if not r.get('error')]
+        
+        # Compare values (ignore TTL, source, and nameserver for matching)
+        cached_values = set(r.get('value', '').lower().rstrip('.') for r in cached_clean)
+        auth_values = set(r.get('value', '').lower().rstrip('.') for r in auth_clean)
+        
+        propagated = cached_values == auth_values
+        
+        # Estimate TTL remaining (from cached records)
+        ttl_remaining = 0
+        if cached_clean:
+            ttl_remaining = max(r.get('ttl', 0) for r in cached_clean)
+        
+        # Build human-readable message
+        if propagated:
+            message = "✓ Records match - DNS is fully propagated"
+        elif not auth_clean and not cached_clean:
+            message = "No records found in either source"
+        elif not auth_clean:
+            message = "Record exists in cache but not at authoritative NS (recently deleted?)"
+        elif not cached_clean:
+            message = f"Record exists at authoritative NS but not in cache yet (propagating, ~{ttl_remaining}s remaining)"
+        else:
+            message = f"Records differ - propagation in progress (~{ttl_remaining}s remaining)"
+        
+        return {
+            "domain": domain,
+            "record_type": record_type,
+            "cached": cached,
+            "authoritative": authoritative,
+            "propagated": propagated,
+            "ttl_remaining": ttl_remaining,
+            "message": message,
+            "cached_values": list(cached_values),
+            "authoritative_values": list(auth_values)
+        }
 
     def get_all_records(self, domain: str, check_www: bool = True, 
                         filter_sections: Optional[List[str]] = None) -> Dict[str, Any]:
@@ -290,12 +501,12 @@ class DNSLookup:
         if self._is_blocked_domain(domain):
             return {'error': 'Domain not allowed for security reasons'}
         
-        all_types = ['A', 'CNAME', 'MX', 'TXT', 'NS']
+        all_types = ['A', 'AAAA', 'CNAME', 'MX', 'TXT', 'NS']
         results: Dict[str, Any] = {}
         
         # Map logical sections to record types
         mapping = {
-            'web': ['A', 'CNAME', 'NS'],
+            'web': ['A', 'AAAA', 'CNAME', 'NS'],  # AAAA for IPv6 detection
             'email': ['MX', 'TXT', 'DMARC', 'DKIM'],
             'SPF': ['TXT']
         }
@@ -325,14 +536,16 @@ class DNSLookup:
 
         # www lookup (if applicable and web-related)
         if check_www and not domain.startswith('www.'):
-            is_web_requested = any(t in requested_types for t in ['A', 'CNAME'])
+            is_web_requested = any(t in requested_types for t in ['A', 'AAAA', 'CNAME'])
             if is_web_requested:
                 www_domain = f"www.{domain}"
                 www_records = self.get_records(www_domain, 'CNAME')
                 www_a_records = self.get_records(www_domain, 'A')
+                www_aaaa_records = self.get_records(www_domain, 'AAAA')  # IPv6
                 
                 results['WWW_CNAME'] = www_records
                 results['WWW_A'] = www_a_records
+                results['WWW_AAAA'] = www_aaaa_records  # IPv6
 
         # DMARC lookup
         if 'DMARC' in requested_types:

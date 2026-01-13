@@ -49,6 +49,19 @@ export default function ChatInterface({ diagnosticData, audience, onClose }: Cha
         })
       });
 
+      if (!res.ok) {
+        if (res.status === 404) {
+          throw new Error('Chat endpoint not found. Ensure you are using "vercel dev".');
+        }
+        const text = await res.text();
+        try {
+          const errorJson = JSON.parse(text);
+          throw new Error(errorJson.error || `Server error: ${res.status}`);
+        } catch {
+          throw new Error(`Server error ${res.status}`);
+        }
+      }
+
       const data = await res.json();
       
       if (data.error) {
@@ -91,6 +104,16 @@ export default function ChatInterface({ diagnosticData, audience, onClose }: Cha
           audience
         })
       });
+
+      if (!res.ok) {
+        const text = await res.text();
+        try {
+          const errorJson = JSON.parse(text);
+          throw new Error(errorJson.error || `Server error: ${res.status}`);
+        } catch {
+          throw new Error(`Server error ${res.status}`);
+        }
+      }
 
       const data = await res.json();
       

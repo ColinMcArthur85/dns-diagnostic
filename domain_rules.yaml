@@ -1,5 +1,26 @@
 version: 1.0
-last_updated: 2025-12-27
+last_updated: 2026-01-12
+
+# --- GLOBAL CONFLICT RULES ---
+# Defines which record types are mutually exclusive at the same host
+# Per RFC 1034/1912: CNAME records cannot coexist with other record types
+global_conflicts:
+  # If we want an A record at a host, these types are fatal conflicts
+  A:
+    - CNAME
+  # If we want a CNAME record at a host, these types are fatal conflicts  
+  CNAME:
+    - A
+    - AAAA
+    - TXT   # RFC violation at root, though sometimes ignored by providers
+    - MX    # RFC violation at root
+
+# --- IPv6 PLATFORM SUPPORT ---
+# Platforms that do NOT support IPv6 (AAAA records must be removed)
+# These platforms are IPv4-only; AAAA records often block SSL certificate generation
+ipv6_unsupported_platforms:
+  - attractwell
+  - getoiling
 
 # --- PLATFORMS (Single Source of Truth) ---
 platforms:
